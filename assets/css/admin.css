@@ -85,6 +85,57 @@
 
 
 /* ==========================================================================
+   Sortable column headers
+   ========================================================================== */
+
+.geoprice-sortable {
+	cursor: pointer;
+	user-select: none;
+	white-space: nowrap;
+	transition: background-color 0.12s;
+}
+
+.geoprice-sortable:hover {
+	background: #e5e5e6;
+}
+
+.geoprice-sort-arrow {
+	display: inline-block;
+	width: 0;
+	height: 0;
+	margin-left: 6px;
+	vertical-align: middle;
+	border-left: 4px solid transparent;
+	border-right: 4px solid transparent;
+	opacity: 0;
+	transition: opacity 0.15s;
+	position: relative;
+	top: -1px;
+}
+
+/* Show a faint arrow on hover to hint that sorting is possible. */
+.geoprice-sortable:hover .geoprice-sort-arrow {
+	opacity: 0.3;
+	border-top: 5px solid #50575e;
+	border-bottom: none;
+}
+
+/* Active sort — ascending (▲) */
+.geoprice-sort-arrow.geoprice-sort-asc {
+	opacity: 1 !important;
+	border-bottom: 5px solid #2271b1;
+	border-top: none;
+}
+
+/* Active sort — descending (▼) */
+.geoprice-sort-arrow.geoprice-sort-desc {
+	opacity: 1 !important;
+	border-top: 5px solid #2271b1;
+	border-bottom: none;
+}
+
+
+/* ==========================================================================
    Remove button (table rows)
    ========================================================================== */
 

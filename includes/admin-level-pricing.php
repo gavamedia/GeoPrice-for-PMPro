@@ -213,10 +213,10 @@ function geoprice_level_pricing_fields( $level ) {
 			<table class="geoprice-country-table widefat" id="geoprice-country-table">
 				<thead>
 					<tr>
-						<th class="geoprice-col-country"><?php esc_html_e( 'Country', 'geoprice-for-pmpro' ); ?></th>
+						<th class="geoprice-col-country geoprice-sortable" data-sort="country"><?php esc_html_e( 'Country', 'geoprice-for-pmpro' ); ?> <span class="geoprice-sort-arrow"></span></th>
 						<th class="geoprice-col-currency"><?php esc_html_e( 'Local Currency', 'geoprice-for-pmpro' ); ?></th>
-						<th class="geoprice-col-price"><?php esc_html_e( 'Initial Payment (USD)', 'geoprice-for-pmpro' ); ?></th>
-						<th class="geoprice-col-price"><?php esc_html_e( 'Renewal Amount (USD)', 'geoprice-for-pmpro' ); ?></th>
+						<th class="geoprice-col-price geoprice-sortable" data-sort="initial"><?php esc_html_e( 'Initial Payment (USD)', 'geoprice-for-pmpro' ); ?> <span class="geoprice-sort-arrow"></span></th>
+						<th class="geoprice-col-price geoprice-sortable" data-sort="renewal"><?php esc_html_e( 'Renewal Amount (USD)', 'geoprice-for-pmpro' ); ?> <span class="geoprice-sort-arrow"></span></th>
 						<th class="geoprice-col-actions">&nbsp;</th>
 					</tr>
 				</thead>

@@ -12,6 +12,8 @@
  *      A compact table showing only active countries (US/CA/MX defaults + any
  *      countries with saved prices). Each row has price inputs and a Remove button.
  *      Row highlighting (green) is applied dynamically when prices are entered.
+ *      Column headers (Country, Initial Payment, Renewal Amount) are sortable.
+ *      Sort preference is persisted in localStorage across all membership levels.
  *
  *   2. ADD COUNTRY MODAL:
  *      A polished popup dialog listing all ~195 countries. Features:
@@ -124,6 +126,121 @@
 
 
 		/* ================================================================
+		   PRICING TABLE — Column sorting
+		   ================================================================
+		   Sortable columns: Country (alpha), Initial Payment (numeric),
+		   Renewal Amount (numeric). Sort preference is stored in
+		   localStorage so it persists across page loads and across
+		   different membership level edit pages.
+		*/
+
+		var SORT_KEY = 'geoprice_table_sort';
+		var currentSort = { column: 'country', direction: 'asc' };
+
+		/* Load saved sort preference from localStorage. */
+		try {
+			var saved = localStorage.getItem(SORT_KEY);
+			if (saved) {
+				var parsed = JSON.parse(saved);
+				if (parsed.column && parsed.direction) {
+					currentSort = parsed;
+				}
+			}
+		} catch (e) {
+			/* localStorage unavailable or corrupt — use default. */
+		}
+
+		/**
+		 * Sort the pricing table rows by the given column and direction.
+		 *
+		 * @param {string} column    One of 'country', 'initial', 'renewal'.
+		 * @param {string} direction One of 'asc', 'desc'.
+		 */
+		function sortTable(column, direction) {
+			var $rows = $tbody.find('tr').detach();
+
+			$rows.sort(function(a, b) {
+				var valA, valB;
+
+				if (column === 'country') {
+					/* Sort alphabetically by country name text. */
+					valA = $(a).find('.geoprice-col-country strong').text().toLowerCase();
+					valB = $(b).find('.geoprice-col-country strong').text().toLowerCase();
+					return direction === 'asc'
+						? valA.localeCompare(valB)
+						: valB.localeCompare(valA);
+				}
+
+				/* Numeric sort for price columns. */
+				var inputIndex = (column === 'initial') ? 0 : 1;
+				var rawA = $(a).find('.geoprice-price-input').eq(inputIndex).val().trim();
+				var rawB = $(b).find('.geoprice-price-input').eq(inputIndex).val().trim();
+
+				/*
+				 * Empty values (no price set) sort to the bottom in ascending
+				 * order, and to the top in descending order. This keeps
+				 * "configured" countries grouped together visually.
+				 */
+				var numA = rawA === '' ? null : parseFloat(rawA);
+				var numB = rawB === '' ? null : parseFloat(rawB);
+
+				if (numA === null && numB === null) return 0;
+				if (numA === null) return direction === 'asc' ? 1 : -1;
+				if (numB === null) return direction === 'asc' ? -1 : 1;
+
+				return direction === 'asc' ? numA - numB : numB - numA;
+			});
+
+			$tbody.append($rows);
+		}
+
+		/**
+		 * Update the visual state of sort arrows in the table header.
+		 * Clears all arrows first, then sets the active one.
+		 */
+		function updateSortArrows() {
+			$table.find('.geoprice-sort-arrow')
+				.removeClass('geoprice-sort-asc geoprice-sort-desc');
+
+			$table.find('th[data-sort="' + currentSort.column + '"] .geoprice-sort-arrow')
+				.addClass(currentSort.direction === 'asc' ? 'geoprice-sort-asc' : 'geoprice-sort-desc');
+		}
+
+		/**
+		 * Apply the current sort and save the preference.
+		 * Called on init, after header clicks, and after add/remove operations.
+		 */
+		function applySort() {
+			sortTable(currentSort.column, currentSort.direction);
+			updateSortArrows();
+
+			/* Persist to localStorage. */
+			try {
+				localStorage.setItem(SORT_KEY, JSON.stringify(currentSort));
+			} catch (e) {
+				/* localStorage full or unavailable — silently skip. */
+			}
+		}
+
+		/* Header click handler — toggle sort direction or switch column. */
+		$table.on('click', '.geoprice-sortable', function() {
+			var col = $(this).data('sort');
+			if (currentSort.column === col) {
+				/* Same column: toggle direction. */
+				currentSort.direction = (currentSort.direction === 'asc') ? 'desc' : 'asc';
+			} else {
+				/* New column: default to ascending. */
+				currentSort.column = col;
+				currentSort.direction = 'asc';
+			}
+			applySort();
+		});
+
+		/* Apply the initial sort on page load. */
+		applySort();
+
+
+		/* ================================================================
 		   PRICING TABLE — Remove country
 		   ================================================================ */
 
@@ -131,8 +248,28 @@
 			e.preventDefault();
 			var $tr = $(this).closest('tr');
 			var removedCode = $tr.data('code');
+
+			/*
+			 * If either price field has a value, confirm before removing.
+			 * This prevents accidental loss of configured pricing data.
+			 */
+			var hasPrices = false;
+			$tr.find('.geoprice-price-input').each(function() {
+				if ($(this).val().trim() !== '') {
+					hasPrices = true;
+					return false;
+				}
+			});
+
+			if (hasPrices) {
+				if (!confirm('This country has pricing set. Are you sure you want to remove it?')) {
+					return;
+				}
+			}
+
 			$tr.fadeOut(200, function() {
 				$(this).remove();
+				applySort();
 				showSaveReminder();
 
 				/*
@@ -198,6 +335,7 @@
 
 			var $newRow = $(html).hide();
 			$tbody.append($newRow);
+			applySort();
 			$newRow.fadeIn(200);
 		}
 
