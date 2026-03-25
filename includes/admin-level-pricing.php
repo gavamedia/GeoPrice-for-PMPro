@@ -229,6 +229,11 @@ function geoprice_level_pricing_fields( $level ) {
 				</button>
 			</p>
 
+			<!-- Save reminder — hidden by default, shown by JS when changes are made. -->
+			<div id="geoprice-save-reminder" class="geoprice-save-reminder" style="display:none;">
+				<?php esc_html_e( 'You have unsaved changes. Click "Save Level" at the bottom of the page to apply them.', 'geoprice-for-pmpro' ); ?>
+			</div>
+
 			<!--
 				Country picker modal.
 				Hidden by default; shown when "+ Add Country" is clicked.

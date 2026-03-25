@@ -58,6 +58,7 @@
 		var $sort     = $('#geoprice-modal-sort');
 		var $group    = $('#geoprice-modal-group');
 		var $list     = $('#geoprice-modal-list');
+		var $saveNote = $('#geoprice-save-reminder');
 
 		/*
 		 * Move the modal overlay to <body> so it's outside PMPro's form
@@ -65,6 +66,18 @@
 		 * position) from interfering with position:fixed on the overlay.
 		 */
 		$overlay.appendTo('body');
+
+		/**
+		 * Show the "unsaved changes" reminder.
+		 * Called whenever the admin adds a country, removes a country,
+		 * or edits a price field. Only triggers once — subsequent calls
+		 * are no-ops since the banner is already visible.
+		 */
+		function showSaveReminder() {
+			if ($saveNote.is(':hidden')) {
+				$saveNote.slideDown(250);
+			}
+		}
 
 
 		/* ================================================================
@@ -103,6 +116,7 @@
 
 		$table.on('input', '.geoprice-price-input', function() {
 			updateRowHighlights();
+			showSaveReminder();
 		});
 
 		updateRowHighlights();
@@ -118,6 +132,7 @@
 			var removedCode = $tr.data('code');
 			$tr.fadeOut(200, function() {
 				$(this).remove();
+				showSaveReminder();
 
 				/*
 				 * If the modal is open, un-grey the removed country's row
@@ -254,6 +269,7 @@
 			var $btn = $(this);
 			var code = $btn.data('code');
 			addCountryRow(code);
+			showSaveReminder();
 
 			/*
 			 * Instead of re-rendering the entire list (which resets scroll
