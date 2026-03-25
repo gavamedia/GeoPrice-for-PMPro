@@ -1,9 +1,7 @@
 /**
  * GeoPrice for PMPro — Admin Styles
  *
- * These styles are loaded ONLY on the PMPro membership level edit page
- * (admin.php?page=pmpro-membershiplevels&edit=X). See admin-level-pricing.php
- * for the conditional enqueue logic.
+ * Loaded ONLY on the PMPro membership level edit page.
  *
  * @package   GeoPrice_For_PMPro
  * @copyright 2024-2026 GAVAMEDIA Corporation (https://gavamedia.com)
@@ -12,7 +10,7 @@
 
 
 /* ==========================================================================
-   Country pricing table — structure
+   Country pricing table
    ========================================================================== */
 
 .geoprice-country-table {
@@ -36,11 +34,6 @@
 	background-color: #f6f7f7;
 }
 
-
-/* ==========================================================================
-   Row highlighting for countries with prices
-   ========================================================================== */
-
 .geoprice-country-table tbody tr.geoprice-has-price {
 	background-color: #e8f5e9;
 }
@@ -48,11 +41,6 @@
 .geoprice-country-table tbody tr.geoprice-has-price:hover {
 	background-color: #dcedc8;
 }
-
-
-/* ==========================================================================
-   Table cell styling
-   ========================================================================== */
 
 .geoprice-country-table td {
 	padding: 6px 12px;
@@ -78,11 +66,6 @@
 	text-align: center;
 }
 
-
-/* ==========================================================================
-   Inline elements
-   ========================================================================== */
-
 .geoprice-country-code {
 	color: #888;
 	font-size: 0.9em;
@@ -102,7 +85,7 @@
 
 
 /* ==========================================================================
-   Remove button (in each table row)
+   Remove button (table rows)
    ========================================================================== */
 
 .geoprice-remove-btn {
@@ -112,7 +95,7 @@
 	border: none !important;
 	background: none !important;
 	color: #b32d2e !important;
-	opacity: 0.5;
+	opacity: 0.4;
 	transition: opacity 0.15s;
 }
 
@@ -129,7 +112,7 @@
 
 
 /* ==========================================================================
-   Add Country button area
+   + Add Country button
    ========================================================================== */
 
 .geoprice-actions-wrap {
@@ -145,48 +128,66 @@
 
 
 /* ==========================================================================
-   Modal overlay
+   MODAL — Overlay
+   --------------------------------------------------------------------------
+   The overlay covers the entire viewport. We use a CSS class
+   (.geoprice-modal-visible) to toggle visibility instead of jQuery's
+   .show()/.hide(), because jQuery forces display:block which would
+   override our display:flex and break centering.
+
+   The overlay is moved to <body> by JS on init to escape any ancestor
+   overflow/transform that could break position:fixed.
    ========================================================================== */
 
-.geoprice-modal-overlay {
-	position: fixed;
-	top: 0;
-	left: 0;
-	right: 0;
-	bottom: 0;
-	background: rgba(0, 0, 0, 0.65);
-	backdrop-filter: blur(4px);
-	-webkit-backdrop-filter: blur(4px);
-	z-index: 100050;
-	display: flex;
-	align-items: center;
-	justify-content: center;
+#geoprice-modal-overlay {
+	display: none !important;
+	position: fixed !important;
+	top: 0 !important;
+	left: 0 !important;
+	width: 100vw !important;
+	height: 100vh !important;
+	z-index: 100060 !important;
+	background: rgba(0, 0, 0, 0.6) !important;
+	-webkit-backdrop-filter: blur(3px);
+	backdrop-filter: blur(3px);
+	align-items: center !important;
+	justify-content: center !important;
+	margin: 0 !important;
+	padding: 0 !important;
+	border: none !important;
+	box-sizing: border-box !important;
+}
+
+#geoprice-modal-overlay.geoprice-modal-visible {
+	display: flex !important;
 }
 
 
 /* ==========================================================================
-   Modal container
+   MODAL — Card container
    ========================================================================== */
 
 .geoprice-modal {
-	background: #fff;
-	border-radius: 12px;
+	background: #fff !important;
+	border-radius: 14px !important;
 	box-shadow:
-		0 24px 80px rgba(0, 0, 0, 0.25),
-		0 0 0 1px rgba(0, 0, 0, 0.05);
-	width: 520px;
-	max-width: 92vw;
-	max-height: 80vh;
-	display: flex;
-	flex-direction: column;
-	overflow: hidden;
-	animation: geoPriceModalIn 0.2s ease-out;
+		0 25px 60px rgba(0, 0, 0, 0.3),
+		0 0 0 1px rgba(255, 255, 255, 0.1) !important;
+	width: 540px !important;
+	max-width: 92vw !important;
+	max-height: 80vh !important;
+	display: flex !important;
+	flex-direction: column !important;
+	overflow: hidden !important;
+	animation: geoPriceModalSlideIn 0.25s ease-out;
+	margin: 0 !important;
+	padding: 0 !important;
 }
 
-@keyframes geoPriceModalIn {
+@keyframes geoPriceModalSlideIn {
 	from {
 		opacity: 0;
-		transform: translateY(12px) scale(0.97);
+		transform: translateY(16px) scale(0.96);
 	}
 	to {
 		opacity: 1;
@@ -196,295 +197,329 @@
 
 
 /* ==========================================================================
-   Modal header — dark gradient bar
+   MODAL — Header (dark gradient bar)
    ========================================================================== */
 
 .geoprice-modal-header {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	padding: 18px 24px;
-	background: linear-gradient(135deg, #1d2327 0%, #2c3338 100%);
-	flex-shrink: 0;
+	display: flex !important;
+	justify-content: space-between !important;
+	align-items: center !important;
+	padding: 20px 24px !important;
+	background: linear-gradient(135deg, #1d2327 0%, #2c3338 100%) !important;
+	flex-shrink: 0 !important;
+	border-bottom: none !important;
+	margin: 0 !important;
 }
 
 .geoprice-modal-header h3 {
-	margin: 0;
-	font-size: 15px;
-	font-weight: 600;
-	color: #fff;
-	letter-spacing: 0.02em;
+	margin: 0 !important;
+	padding: 0 !important;
+	font-size: 16px !important;
+	font-weight: 600 !important;
+	color: #fff !important;
+	letter-spacing: 0.01em !important;
+	line-height: 1.3 !important;
+	border: none !important;
+	background: none !important;
 }
 
-.geoprice-modal-close {
-	background: rgba(255, 255, 255, 0.1);
-	border: none;
-	font-size: 18px;
-	cursor: pointer;
-	color: rgba(255, 255, 255, 0.7);
-	padding: 0;
-	line-height: 1;
-	width: 32px;
-	height: 32px;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	border-radius: 8px;
-	transition: background-color 0.15s, color 0.15s;
-}
-
-.geoprice-modal-close:hover {
-	background: rgba(255, 255, 255, 0.2);
-	color: #fff;
-}
-
-
-/* ==========================================================================
-   Modal controls bar — search, sort, group toggle
-   ========================================================================== */
-
-.geoprice-modal-controls {
-	padding: 14px 24px;
-	background: #f8f9fa;
-	border-bottom: 1px solid #e0e0e0;
-	display: flex;
-	align-items: center;
-	gap: 10px;
-	flex-shrink: 0;
-	flex-wrap: wrap;
-}
-
-/* Search input — prominent with icon hint via placeholder */
-#geoprice-modal-search {
-	flex: 1;
-	min-width: 160px;
-	padding: 8px 12px;
-	border: 1px solid #c3c4c7;
-	border-radius: 6px;
-	font-size: 13px;
-	background: #fff;
-	transition: border-color 0.15s, box-shadow 0.15s;
-}
-
-#geoprice-modal-search:focus {
-	border-color: #2271b1;
-	box-shadow: 0 0 0 1px #2271b1;
-	outline: none;
-}
-
-/* Sort dropdown */
-#geoprice-modal-sort {
-	width: auto;
-	padding: 7px 10px;
-	border: 1px solid #c3c4c7;
-	border-radius: 6px;
-	font-size: 12px;
-	background: #fff;
-	cursor: pointer;
-}
-
-/* Group toggle */
-.geoprice-modal-group-label {
-	white-space: nowrap;
-	font-size: 12px;
-	color: #50575e;
-	cursor: pointer;
-	display: flex;
-	align-items: center;
-	gap: 5px;
-	user-select: none;
-}
-
-.geoprice-modal-group-label input[type="checkbox"] {
-	margin: 0;
-}
-
-
-/* ==========================================================================
-   Modal scrollable country list
-   ========================================================================== */
-
-.geoprice-modal-list {
-	overflow-y: auto;
-	flex: 1;
-	/* Show roughly 6 rows at a time, making it clear the list is scrollable */
-	min-height: 200px;
-	max-height: 400px;
-	padding: 8px 0;
-}
-
-/* Custom scrollbar for webkit browsers */
-.geoprice-modal-list::-webkit-scrollbar {
-	width: 6px;
-}
-
-.geoprice-modal-list::-webkit-scrollbar-track {
-	background: transparent;
-}
-
-.geoprice-modal-list::-webkit-scrollbar-thumb {
-	background: #c3c4c7;
-	border-radius: 3px;
-}
-
-.geoprice-modal-list::-webkit-scrollbar-thumb:hover {
-	background: #a0a5aa;
-}
-
-
-/* ==========================================================================
-   Continent group header (sticky when grouped)
-   ========================================================================== */
-
-.geoprice-modal-continent-header {
-	background: linear-gradient(135deg, #e9ecef 0%, #f0f0f1 100%);
-	padding: 10px 24px;
-	font-weight: 700;
-	font-size: 11px;
-	text-transform: uppercase;
-	letter-spacing: 0.08em;
-	color: #50575e;
-	border-top: 1px solid #dcdcde;
-	border-bottom: 1px solid #dcdcde;
-	position: sticky;
-	top: 0;
-	z-index: 1;
-}
-
-.geoprice-modal-continent-header:first-child {
-	border-top: none;
-}
-
-
-/* ==========================================================================
-   Modal country row — card-like with clear visual hierarchy
-   ========================================================================== */
-
-.geoprice-modal-row {
-	display: flex;
-	align-items: center;
-	padding: 10px 24px;
-	margin: 0 8px;
-	border-radius: 8px;
-	transition: background-color 0.12s;
-	gap: 12px;
-}
-
-.geoprice-modal-row:hover {
-	background-color: #f0f6fc;
-}
-
-/* Flag emoji — large enough to be a clear visual anchor */
-.geoprice-modal-row-flag {
-	font-size: 24px;
-	line-height: 1;
-	flex-shrink: 0;
-	width: 32px;
-	text-align: center;
-}
-
-/* Country info block — name on top, code + currency below */
-.geoprice-modal-row-info {
-	flex: 1;
-	min-width: 0;
-}
-
-.geoprice-modal-row-name {
-	font-size: 13px;
-	font-weight: 500;
-	color: #1d2327;
-	line-height: 1.3;
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-}
-
-.geoprice-modal-row-meta {
-	font-size: 11px;
-	color: #888;
-	line-height: 1.3;
-	margin-top: 1px;
-}
-
-.geoprice-modal-row-meta .geoprice-sep {
-	margin: 0 4px;
-	color: #ccc;
-}
-
-/* "+ Add" button — pill-shaped, modern */
-.geoprice-modal-add-btn {
-	flex-shrink: 0;
-	font-size: 12px !important;
-	font-weight: 500 !important;
-	padding: 5px 14px !important;
+button.geoprice-modal-close {
+	background: rgba(255, 255, 255, 0.1) !important;
+	border: none !important;
+	font-size: 20px !important;
+	cursor: pointer !important;
+	color: rgba(255, 255, 255, 0.7) !important;
+	padding: 0 !important;
+	margin: 0 !important;
+	line-height: 1 !important;
+	width: 34px !important;
+	height: 34px !important;
+	display: flex !important;
+	align-items: center !important;
+	justify-content: center !important;
+	border-radius: 8px !important;
+	transition: background-color 0.15s, color 0.15s !important;
 	min-height: 0 !important;
-	line-height: 1.4 !important;
-	border-radius: 20px !important;
-	border: 1px solid #2271b1 !important;
-	color: #2271b1 !important;
-	background: transparent !important;
-	cursor: pointer;
-	transition: all 0.15s !important;
+	box-shadow: none !important;
 }
 
-.geoprice-modal-add-btn:hover {
-	background: #2271b1 !important;
+button.geoprice-modal-close:hover {
+	background: rgba(255, 255, 255, 0.2) !important;
 	color: #fff !important;
 }
 
 
 /* ==========================================================================
-   Already-added state — subtle, non-interactive
+   MODAL — Controls bar (search, sort, group)
    ========================================================================== */
 
-.geoprice-modal-row.geoprice-already-added {
-	opacity: 1;
-	pointer-events: none;
+.geoprice-modal-controls {
+	padding: 16px 24px !important;
+	background: #f8f9fa !important;
+	border-bottom: 1px solid #e2e4e7 !important;
+	display: flex !important;
+	align-items: center !important;
+	gap: 10px !important;
+	flex-shrink: 0 !important;
+	flex-wrap: wrap !important;
+	margin: 0 !important;
 }
 
-.geoprice-modal-row.geoprice-already-added .geoprice-modal-row-flag {
-	opacity: 0.4;
+#geoprice-modal-search {
+	flex: 1 !important;
+	min-width: 140px !important;
+	padding: 9px 14px !important;
+	border: 1px solid #c3c4c7 !important;
+	border-radius: 8px !important;
+	font-size: 13px !important;
+	background: #fff !important;
+	transition: border-color 0.15s, box-shadow 0.15s !important;
+	line-height: 1.4 !important;
+	margin: 0 !important;
+	box-shadow: none !important;
+	outline: none !important;
 }
 
-.geoprice-modal-row.geoprice-already-added .geoprice-modal-row-info {
-	opacity: 0.4;
+#geoprice-modal-search:focus {
+	border-color: #2271b1 !important;
+	box-shadow: 0 0 0 2px rgba(34, 113, 177, 0.15) !important;
 }
 
-.geoprice-modal-row.geoprice-already-added .geoprice-modal-add-btn {
-	display: none;
+#geoprice-modal-sort {
+	padding: 8px 12px !important;
+	border: 1px solid #c3c4c7 !important;
+	border-radius: 8px !important;
+	font-size: 12px !important;
+	background: #fff !important;
+	cursor: pointer !important;
+	line-height: 1.4 !important;
+	min-height: 0 !important;
 }
 
-.geoprice-modal-added-badge {
-	flex-shrink: 0;
-	font-size: 10px;
-	font-weight: 600;
-	text-transform: uppercase;
-	letter-spacing: 0.05em;
-	color: #00a32a;
-	background: #edfaef;
-	padding: 3px 10px;
-	border-radius: 20px;
-	border: 1px solid #b8e6be;
+.geoprice-modal-group-label {
+	white-space: nowrap !important;
+	font-size: 12px !important;
+	color: #50575e !important;
+	cursor: pointer !important;
+	display: flex !important;
+	align-items: center !important;
+	gap: 5px !important;
+	user-select: none !important;
+	margin: 0 !important;
 }
 
 
 /* ==========================================================================
-   Empty state (no search results)
+   MODAL — Scrollable country list
+   ========================================================================== */
+
+.geoprice-modal-list {
+	overflow-y: auto !important;
+	overflow-x: hidden !important;
+	flex: 1 1 auto !important;
+	min-height: 240px !important;
+	max-height: 440px !important;
+	padding: 6px 0 !important;
+	margin: 0 !important;
+}
+
+/* Custom scrollbar (webkit) */
+.geoprice-modal-list::-webkit-scrollbar {
+	width: 6px;
+}
+.geoprice-modal-list::-webkit-scrollbar-track {
+	background: transparent;
+}
+.geoprice-modal-list::-webkit-scrollbar-thumb {
+	background: #ccc;
+	border-radius: 3px;
+}
+.geoprice-modal-list::-webkit-scrollbar-thumb:hover {
+	background: #aaa;
+}
+
+
+/* ==========================================================================
+   MODAL — Continent group header (sticky)
+   ========================================================================== */
+
+.geoprice-modal-continent-header {
+	background: linear-gradient(135deg, #e9ecef 0%, #f0f0f1 100%) !important;
+	padding: 10px 24px !important;
+	font-weight: 700 !important;
+	font-size: 11px !important;
+	text-transform: uppercase !important;
+	letter-spacing: 0.08em !important;
+	color: #50575e !important;
+	border-top: 1px solid #dcdcde !important;
+	border-bottom: 1px solid #dcdcde !important;
+	position: sticky !important;
+	top: 0 !important;
+	z-index: 2 !important;
+	margin: 0 !important;
+}
+
+
+/* ==========================================================================
+   MODAL — Country row
+   --------------------------------------------------------------------------
+   Each row is a horizontal flex container:
+     [Flag 32px] [Info: Name + Code·Currency (flex:1)] [Button]
+   ========================================================================== */
+
+.geoprice-modal-row {
+	display: flex !important;
+	flex-direction: row !important;
+	align-items: center !important;
+	padding: 10px 20px !important;
+	margin: 2px 8px !important;
+	border-radius: 10px !important;
+	transition: background-color 0.12s !important;
+	gap: 14px !important;
+	cursor: default !important;
+	box-sizing: border-box !important;
+}
+
+.geoprice-modal-row:hover {
+	background-color: #f0f6fc !important;
+}
+
+/* Flag — large emoji as visual anchor */
+.geoprice-modal-row-flag {
+	font-size: 28px !important;
+	line-height: 1 !important;
+	flex: 0 0 36px !important;
+	width: 36px !important;
+	text-align: center !important;
+	display: block !important;
+}
+
+/* Info block — two lines */
+.geoprice-modal-row-info {
+	flex: 1 1 auto !important;
+	min-width: 0 !important;
+	display: block !important;
+}
+
+.geoprice-modal-row-name {
+	font-size: 14px !important;
+	font-weight: 500 !important;
+	color: #1d2327 !important;
+	line-height: 1.3 !important;
+	white-space: nowrap !important;
+	overflow: hidden !important;
+	text-overflow: ellipsis !important;
+	display: block !important;
+}
+
+.geoprice-modal-row-meta {
+	font-size: 11px !important;
+	color: #888 !important;
+	line-height: 1.4 !important;
+	margin-top: 2px !important;
+	display: block !important;
+}
+
+.geoprice-modal-row-meta .geoprice-modal-row-code {
+	color: #888 !important;
+}
+
+.geoprice-modal-row-meta .geoprice-sep {
+	margin: 0 5px !important;
+	color: #ccc !important;
+}
+
+.geoprice-modal-row-meta .geoprice-modal-row-currency {
+	color: #aaa !important;
+}
+
+
+/* ==========================================================================
+   MODAL — "+ Add" button (pill-shaped)
+   ========================================================================== */
+
+button.geoprice-modal-add-btn {
+	flex: 0 0 auto !important;
+	display: inline-flex !important;
+	align-items: center !important;
+	justify-content: center !important;
+	font-size: 12px !important;
+	font-weight: 500 !important;
+	padding: 6px 16px !important;
+	min-height: 0 !important;
+	line-height: 1.3 !important;
+	border-radius: 20px !important;
+	border: 1.5px solid #2271b1 !important;
+	color: #2271b1 !important;
+	background: transparent !important;
+	cursor: pointer !important;
+	transition: all 0.15s ease !important;
+	white-space: nowrap !important;
+	box-shadow: none !important;
+	text-decoration: none !important;
+}
+
+button.geoprice-modal-add-btn:hover {
+	background: #2271b1 !important;
+	color: #fff !important;
+	box-shadow: 0 2px 8px rgba(34, 113, 177, 0.25) !important;
+}
+
+
+/* ==========================================================================
+   MODAL — "Already added" state
+   ========================================================================== */
+
+.geoprice-modal-row.geoprice-already-added {
+	opacity: 1 !important;
+	pointer-events: none !important;
+}
+
+.geoprice-modal-row.geoprice-already-added .geoprice-modal-row-flag {
+	opacity: 0.35 !important;
+}
+
+.geoprice-modal-row.geoprice-already-added .geoprice-modal-row-info {
+	opacity: 0.35 !important;
+}
+
+.geoprice-modal-row.geoprice-already-added button.geoprice-modal-add-btn {
+	display: none !important;
+}
+
+.geoprice-modal-added-badge {
+	flex: 0 0 auto !important;
+	display: inline-block !important;
+	font-size: 10px !important;
+	font-weight: 600 !important;
+	text-transform: uppercase !important;
+	letter-spacing: 0.04em !important;
+	color: #00a32a !important;
+	background: #edfaef !important;
+	padding: 4px 12px !important;
+	border-radius: 20px !important;
+	border: 1px solid #b8e6be !important;
+	white-space: nowrap !important;
+}
+
+
+/* ==========================================================================
+   MODAL — Empty state
    ========================================================================== */
 
 .geoprice-modal-empty {
-	padding: 48px 24px;
-	text-align: center;
-	color: #888;
-	font-size: 13px;
+	padding: 48px 24px !important;
+	text-align: center !important;
 }
 
 .geoprice-modal-empty-icon {
-	font-size: 36px;
-	margin-bottom: 8px;
-	opacity: 0.3;
+	font-size: 40px !important;
+	margin-bottom: 10px !important;
+	opacity: 0.3 !important;
+	display: block !important;
 }
 
 .geoprice-modal-empty-text {
-	color: #666;
+	font-size: 14px !important;
+	color: #888 !important;
 }

@@ -247,7 +247,7 @@ function geoprice_level_pricing_fields( $level ) {
 							placeholder="&#x1F50D; <?php esc_attr_e( 'Search countries...', 'geoprice-for-pmpro' ); ?>"
 							autocomplete="off" />
 						<select id="geoprice-modal-sort">
-							<option value="alpha"><?php esc_html_e( 'Sort: A \u2192 Z', 'geoprice-for-pmpro' ); ?></option>
+							<option value="alpha"><?php esc_html_e( 'Sort: A → Z', 'geoprice-for-pmpro' ); ?></option>
 							<option value="population"><?php esc_html_e( 'Sort: Population', 'geoprice-for-pmpro' ); ?></option>
 						</select>
 						<label class="geoprice-modal-group-label">

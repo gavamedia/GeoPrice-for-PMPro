@@ -15,7 +15,7 @@
  *
  *   2. ADD COUNTRY MODAL:
  *      A polished popup dialog listing all ~195 countries. Features:
- *        - Flag emojis for visual identification.
+ *        - Flag emojis for instant visual identification.
  *        - Two-line layout: country name on top, code + currency below.
  *        - Real-time search/filter by country name or code.
  *        - Sort by name (A-Z) or population (largest first).
@@ -25,8 +25,17 @@
  *
  *   3. REMOVE COUNTRY:
  *      Each table row has a Remove button. Clicking it removes the row from
- *      the DOM. When the form is saved, removed countries have no inputs in
- *      the POST data, so their prices are effectively deleted.
+ *      the DOM immediately. On form save, that country has no inputs in POST.
+ *
+ * MODAL RENDERING NOTE:
+ *   On init, the modal overlay is moved from its original position (inside
+ *   PMPro's form) to document.body. This prevents CSS containment issues
+ *   (e.g., overflow:hidden, transform, or position:relative on ancestor
+ *   elements) from breaking the fixed-position overlay.
+ *
+ *   Visibility is toggled via a CSS class (.geoprice-modal-visible) rather
+ *   than jQuery's .show()/.hide(), because jQuery sets display:block which
+ *   overrides our display:flex and breaks the centering layout.
  *
  * DATA SOURCE:
  *   Country data (name, currency, continent, population) is passed from PHP
@@ -50,14 +59,21 @@
 		var $group    = $('#geoprice-modal-group');
 		var $list     = $('#geoprice-modal-list');
 
+		/*
+		 * Move the modal overlay to <body> so it's outside PMPro's form
+		 * hierarchy. This prevents ancestor CSS properties (overflow, transform,
+		 * position) from interfering with position:fixed on the overlay.
+		 */
+		$overlay.appendTo('body');
+
+
 		/* ================================================================
 		   UTILITY — Flag emoji from country code
 		   ================================================================
 		   Convert a 2-letter ISO country code to a flag emoji.
-		   Works by mapping each letter to a Unicode Regional Indicator Symbol:
-		     'A' => 0x1F1E6, 'B' => 0x1F1E7, ... 'Z' => 0x1F1FF
-		   Pairing two of these gives the flag emoji for that country.
-		   Example: 'US' => 🇺🇸, 'CA' => 🇨🇦
+		   Each letter A-Z maps to a Unicode Regional Indicator Symbol:
+		     'A' => U+1F1E6, 'B' => U+1F1E7, ... 'Z' => U+1F1FF
+		   Pairing two gives the flag: 'US' => 🇺🇸, 'CA' => 🇨🇦
 		*/
 		function codeToFlag(code) {
 			if (!code || code.length !== 2) return '';
@@ -100,7 +116,7 @@
 			e.preventDefault();
 			$(this).closest('tr').fadeOut(200, function() {
 				$(this).remove();
-				if ($overlay.is(':visible')) {
+				if ($overlay.hasClass('geoprice-modal-visible')) {
 					renderModalList();
 				}
 			});
@@ -148,7 +164,7 @@
 			$tbody.append($newRow);
 			$newRow.fadeIn(200);
 
-			if ($overlay.is(':visible')) {
+			if ($overlay.hasClass('geoprice-modal-visible')) {
 				renderModalList();
 			}
 		}
@@ -156,37 +172,49 @@
 
 		/* ================================================================
 		   MODAL — Open / Close
-		   ================================================================ */
+		   ================================================================
+		   We toggle visibility via CSS class instead of jQuery .fadeIn()
+		   because jQuery sets display:block, which overrides our CSS
+		   display:flex and breaks the centering layout.
+		*/
+
+		function openModal() {
+			$search.val('');
+			renderModalList();
+			$overlay.addClass('geoprice-modal-visible');
+			setTimeout(function() { $search.focus(); }, 50);
+		}
+
+		function closeModal() {
+			$overlay.removeClass('geoprice-modal-visible');
+		}
 
 		$addBtn.on('click', function(e) {
 			e.preventDefault();
-			$search.val('');
-			renderModalList();
-			$overlay.fadeIn(150);
-			/* Small delay so the fade-in is visible before focus shifts. */
-			setTimeout(function() { $search.focus(); }, 160);
+			openModal();
 		});
 
 		$overlay.on('click', '.geoprice-modal-close', function(e) {
 			e.preventDefault();
-			$overlay.fadeOut(150);
+			closeModal();
 		});
 
+		/* Close on overlay background click (not the modal card itself). */
 		$overlay.on('click', function(e) {
-			if ($(e.target).is('.geoprice-modal-overlay')) {
-				$overlay.fadeOut(150);
+			if (e.target === $overlay[0]) {
+				closeModal();
 			}
 		});
 
 		$(document).on('keydown', function(e) {
-			if (e.key === 'Escape' && $overlay.is(':visible')) {
-				$overlay.fadeOut(150);
+			if (e.key === 'Escape' && $overlay.hasClass('geoprice-modal-visible')) {
+				closeModal();
 			}
 		});
 
 
 		/* ================================================================
-		   MODAL — Controls (search, sort, group)
+		   MODAL — Controls
 		   ================================================================ */
 
 		$search.on('input', function() {
@@ -222,7 +250,6 @@
 			var sortBy  = $sort.val();
 			var groupBy = $group.is(':checked');
 
-			/* Build flat array of country objects. */
 			var entries = [];
 			$.each(countries, function(code, data) {
 				entries.push({
@@ -234,7 +261,6 @@
 				});
 			});
 
-			/* Filter by search query (matches name or code). */
 			if (query) {
 				entries = entries.filter(function(e) {
 					return e.name.toLowerCase().indexOf(query) !== -1 ||
@@ -242,7 +268,6 @@
 				});
 			}
 
-			/* Sort. */
 			if (sortBy === 'population') {
 				entries.sort(function(a, b) {
 					return b.population - a.population;
@@ -253,13 +278,11 @@
 				});
 			}
 
-			/* Determine which countries are already in the pricing table. */
 			var addedCodes = {};
 			$tbody.find('tr[data-code]').each(function() {
 				addedCodes[$(this).data('code')] = true;
 			});
 
-			/* Build HTML. */
 			var html = '';
 
 			if (entries.length === 0) {
@@ -307,35 +330,35 @@
 			var cls = 'geoprice-modal-row' + (isAdded ? ' geoprice-already-added' : '');
 			var flag = codeToFlag(entry.code);
 
-			var html = '<div class="' + cls + '">';
+			var h = '<div class="' + cls + '">';
 
-			/* Flag emoji */
-			html += '<span class="geoprice-modal-row-flag">' + flag + '</span>';
+			/* Flag */
+			h += '<span class="geoprice-modal-row-flag">' + flag + '</span>';
 
-			/* Country info: name on line 1, code + currency on line 2 */
-			html += '<div class="geoprice-modal-row-info">' +
-				'<div class="geoprice-modal-row-name">' + escHtml(entry.name) + '</div>' +
-				'<div class="geoprice-modal-row-meta">' +
-					escHtml(entry.code) +
-					'<span class="geoprice-sep">&middot;</span>' +
-					escHtml(entry.currency) +
-				'</div>' +
+			/* Info: name + meta */
+			h += '<div class="geoprice-modal-row-info">';
+			h += '<div class="geoprice-modal-row-name">' + escHtml(entry.name) + '</div>';
+			h += '<div class="geoprice-modal-row-meta">' +
+				'<span class="geoprice-modal-row-code">' + escHtml(entry.code) + '</span>' +
+				'<span class="geoprice-sep">&middot;</span>' +
+				'<span class="geoprice-modal-row-currency">' + escHtml(entry.currency) + '</span>' +
 			'</div>';
+			h += '</div>';
 
-			/* Action: Add button or Added badge */
+			/* Action */
 			if (isAdded) {
-				html += '<span class="geoprice-modal-added-badge">&#10003; Added</span>';
+				h += '<span class="geoprice-modal-added-badge">&#10003; Added</span>';
 			} else {
-				html += '<button type="button" class="geoprice-modal-add-btn" data-code="' + escAttr(entry.code) + '">+ Add</button>';
+				h += '<button type="button" class="geoprice-modal-add-btn" data-code="' + escAttr(entry.code) + '">+ Add</button>';
 			}
 
-			html += '</div>';
-			return html;
+			h += '</div>';
+			return h;
 		}
 
 
 		/* ================================================================
-		   UTILITY — HTML escaping helpers
+		   UTILITY — HTML escaping
 		   ================================================================ */
 
 		function escHtml(str) {
