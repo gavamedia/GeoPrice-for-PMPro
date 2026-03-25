@@ -173,7 +173,7 @@ defined( 'ABSPATH' ) || exit;
  *                           Used by the plugin_action_links filter to add a
  *                           "Settings" link on the Plugins page.
  */
-define( 'GEOPRICE_PMPRO_VERSION', '1.1.0' );
+define( 'GEOPRICE_PMPRO_VERSION', '1.1.1' );
 define( 'GEOPRICE_PMPRO_DIR', plugin_dir_path( __FILE__ ) );
 define( 'GEOPRICE_PMPRO_URL', plugin_dir_url( __FILE__ ) );
 define( 'GEOPRICE_PMPRO_BASENAME', plugin_basename( __FILE__ ) );

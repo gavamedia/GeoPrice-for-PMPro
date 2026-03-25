@@ -240,6 +240,20 @@
 			addCountryRow(code);
 		});
 
+		/*
+		 * Continent header click — toggle collapse of the group below.
+		 * Uses slideToggle for a smooth animation rather than an abrupt show/hide.
+		 */
+		$list.on('click', '.geoprice-modal-continent-header', function() {
+			var $header = $(this);
+			var targetId = $header.data('target');
+			var $group = $('#' + targetId);
+			var $arrow = $header.find('.geoprice-continent-arrow');
+
+			$group.slideToggle(200);
+			$arrow.toggleClass('geoprice-collapsed');
+		});
+
 
 		/* ================================================================
 		   MODAL — Render the country list
@@ -302,13 +316,19 @@
 
 				$.each(continentOrder, function(_, continent) {
 					if (!grouped[continent] || grouped[continent].length === 0) return;
-					html += '<div class="geoprice-modal-continent-header">' +
-						escHtml(continent) +
-						' <span style="opacity:0.5;font-weight:400;">(' + grouped[continent].length + ')</span>' +
+					var cid = 'geoprice-cg-' + continent.replace(/\s+/g, '-').toLowerCase();
+					html += '<div class="geoprice-modal-continent-header" data-target="' + cid + '">' +
+						'<span>' +
+							escHtml(continent) +
+							' <span style="opacity:0.5;font-weight:400;">(' + grouped[continent].length + ')</span>' +
+						'</span>' +
+						'<span class="geoprice-continent-arrow">&#9660;</span>' +
 					'</div>';
+					html += '<div class="geoprice-modal-continent-group" id="' + cid + '">';
 					$.each(grouped[continent], function(_, e) {
 						html += buildModalRow(e, addedCodes);
 					});
+					html += '</div>';
 				});
 			} else {
 				$.each(entries, function(_, e) {
