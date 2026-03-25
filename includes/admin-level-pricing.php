@@ -4,7 +4,7 @@
  *
  * This file adds a "Geographic Pricing" collapsible section to the PMPro
  * membership level edit form (wp-admin/admin.php?page=pmpro-membershiplevels&edit=X),
- * positioned between Content Settings and Other Settings as its own top-level
+ * positioned directly below Billing Details as its own top-level collapsible
  * section with PMPro's native toggle UI. It allows the admin to set custom
  * USD prices for specific countries.
  *
@@ -12,13 +12,13 @@
  *   PMPro's level edit form fires several action hooks at different points.
  *   We use two of them:
  *
- *   1. `pmpro_membership_level_after_content_settings` (priority 10):
- *      Fires at the end of the Content Settings section. We close PMPro's
- *      section wrappers, render our own standalone collapsible section using
- *      PMPro's native pmpro_section markup, then re-open the wrappers so
- *      PMPro's own closing tags don't produce broken HTML.
- *      This positions our section BETWEEN Content Settings and Other Settings,
- *      giving it equal visual prominence to PMPro's built-in sections.
+ *   1. `pmpro_membership_level_after_trial_settings` (priority 10):
+ *      Fires at the end of the Billing Details section (after Trial Settings).
+ *      We close PMPro's section wrappers, render our own standalone collapsible
+ *      section using PMPro's native pmpro_section markup, then re-open the
+ *      wrappers so PMPro's own closing tags don't produce broken HTML.
+ *      This positions our section directly BELOW Billing Details and ABOVE
+ *      Expiration Settings, which is the natural location for pricing config.
  *
  *   2. `pmpro_save_membership_level` (priority 10):
  *      Fires after PMPro has saved the level to the database (including its
@@ -141,10 +141,10 @@ add_action( 'admin_enqueue_scripts', 'geoprice_admin_enqueue_scripts' );
  *      then fires pmpro_save_membership_level, which triggers our save handler.
  *
  * SECTION PLACEMENT TECHNIQUE:
- *   We hook into `pmpro_membership_level_after_content_settings` which fires
- *   INSIDE the Content Settings section's inner wrapper. To create our own
- *   standalone collapsible section (rather than being nested inside Content
- *   Settings), we use a standard PMPro add-on technique:
+ *   We hook into `pmpro_membership_level_after_trial_settings` which fires
+ *   INSIDE the Billing Details section's inner wrapper. To create our own
+ *   standalone collapsible section (rather than being nested inside Billing
+ *   Details), we use a standard PMPro add-on technique:
  *
  *   1. Close the current section's </div></div> wrappers (pmpro_section_inside
  *      and pmpro_section).
@@ -153,10 +153,10 @@ add_action( 'admin_enqueue_scripts', 'geoprice_admin_enqueue_scripts' );
  *      (which follow the hook) produce valid HTML.
  *
  *   This positions Geographic Pricing as a top-level collapsible section
- *   between Content Settings and Other Settings, matching PMPro's native UI.
+ *   directly below Billing Details, matching PMPro's native UI.
  *
  * PMPRO HOOK USED:
- *   `pmpro_membership_level_after_content_settings` receives the $level object
+ *   `pmpro_membership_level_after_trial_settings` receives the $level object
  *   as its only parameter. This object contains the level's current data
  *   (id, name, initial_payment, billing_amount, etc.) as loaded from the database.
  *   We use $level->id to look up our per-country prices from level meta.
@@ -215,9 +215,9 @@ function geoprice_level_pricing_fields( $level ) {
 	 * into the level edit page from "after_*_settings" hooks.
 	 */
 	?>
-	<?php // Step 1: Close Content Settings section wrappers. ?>
-	</div> <!-- close pmpro_section_inside (Content Settings) -->
-	</div> <!-- close pmpro_section (Content Settings) -->
+	<?php // Step 1: Close Billing Details section wrappers. ?>
+	</div> <!-- close pmpro_section_inside (Billing Details) -->
+	</div> <!-- close pmpro_section (Billing Details) -->
 
 	<?php // Step 2: Render our own standalone pmpro_section. ?>
 	<div id="geographic-pricing" class="pmpro_section" data-visibility="shown" data-activated="true">
@@ -229,7 +229,7 @@ function geoprice_level_pricing_fields( $level ) {
 		</div>
 		<div class="pmpro_section_inside">
 			<p class="description" style="margin-bottom: 1em;">
-				<?php esc_html_e( 'Set custom USD prices per country. Leave blank to use the default level price. Visitors will see amounts converted to their local currency.', 'geoprice-for-pmpro' ); ?>
+				<?php esc_html_e( 'Set custom USD prices per country. Leave blank to use the default prices, set in the "Billing Details" area above. Visitors will see amounts converted to their local currency.', 'geoprice-for-pmpro' ); ?>
 			</p>
 
 			<!--
@@ -316,7 +316,7 @@ function geoprice_level_pricing_fields( $level ) {
 	<div class="pmpro_section_inside">
 	<?php
 }
-add_action( 'pmpro_membership_level_after_content_settings', 'geoprice_level_pricing_fields' );
+add_action( 'pmpro_membership_level_after_trial_settings', 'geoprice_level_pricing_fields' );
 
 /**
  * Render a single country row in the pricing table.
