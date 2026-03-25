@@ -586,6 +586,20 @@ function geoprice_settings_page() {
 						<?php
 						$ppp_updated   = (int) get_option( 'geoprice_ppp_updated', 0 );
 						$ppp_data_year = (int) get_option( 'geoprice_ppp_data_year', 0 );
+
+						/*
+						 * Auto-fetch PPP data if it has never been fetched.
+						 * This handles the case where the admin visits the settings
+						 * page before ever editing a membership level (which is the
+						 * other auto-fetch trigger in admin-level-pricing.php).
+						 */
+						if ( ! $ppp_updated ) {
+							$auto_fetch = geoprice_fetch_ppp_data();
+							if ( $auto_fetch ) {
+								$ppp_updated   = (int) get_option( 'geoprice_ppp_updated', 0 );
+								$ppp_data_year = (int) get_option( 'geoprice_ppp_data_year', 0 );
+							}
+						}
 						?>
 						<?php if ( $ppp_updated ) : ?>
 							<p>
@@ -599,7 +613,7 @@ function geoprice_settings_page() {
 								?>
 							</p>
 						<?php else : ?>
-							<p><?php esc_html_e( 'PPP data has not been fetched yet. Click the button below to fetch it now.', 'geoprice-for-pmpro' ); ?></p>
+							<p style="color: #b32d2e; font-weight: 500;"><?php esc_html_e( 'PPP data could not be fetched. The World Bank API may be temporarily unavailable. Click the button below to try again.', 'geoprice-for-pmpro' ); ?></p>
 						<?php endif; ?>
 						<p>
 							<a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin.php?page=geoprice-settings&geoprice_refresh_ppp=1' ), 'geoprice_refresh_ppp' ) ); ?>" class="button button-secondary">

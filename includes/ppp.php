@@ -62,12 +62,14 @@ function geoprice_fetch_ppp_data() {
 	 * Fetch from World Bank API V2.
 	 *   - country/all: includes all countries (aggregates are filtered later).
 	 *   - indicator/NY.GDP.PCAP.PP.CD: GDP per capita, PPP (current int'l $).
-	 *   - per_page=2000: ensures all entries fit in one page (~270 entities × 5 years).
+	 *   - per_page=5000: ensures all entries fit in one page. The World Bank
+	 *     returns ~300 entities (217 countries + 80 aggregate regions) × 5 years
+	 *     = ~1500 entries, but we use 5000 for safety margin.
 	 *   - date=YYYY:YYYY: date range to get multiple years for freshness.
 	 *   - format=json: JSON response format.
 	 */
 	$url = sprintf(
-		'https://api.worldbank.org/v2/country/all/indicator/NY.GDP.PCAP.PP.CD?format=json&per_page=2000&date=%d:%d',
+		'https://api.worldbank.org/v2/country/all/indicator/NY.GDP.PCAP.PP.CD?format=json&per_page=5000&date=%d:%d',
 		$start_year,
 		$current_year
 	);
