@@ -14,11 +14,13 @@
  *      Row highlighting (green) is applied dynamically when prices are entered.
  *
  *   2. ADD COUNTRY MODAL:
- *      A popup dialog listing all ~195 countries. Features:
- *        - Real-time search/filter by country name.
+ *      A polished popup dialog listing all ~195 countries. Features:
+ *        - Flag emojis for visual identification.
+ *        - Two-line layout: country name on top, code + currency below.
+ *        - Real-time search/filter by country name or code.
  *        - Sort by name (A-Z) or population (largest first).
  *        - Group by continent with sticky headers.
- *        - Countries already in the table are greyed out with "Added" label.
+ *        - Countries already in the table are dimmed with a green "Added" badge.
  *        - Clicking "+ Add" instantly inserts a new row into the pricing table.
  *
  *   3. REMOVE COUNTRY:
@@ -49,12 +51,26 @@
 		var $list     = $('#geoprice-modal-list');
 
 		/* ================================================================
+		   UTILITY — Flag emoji from country code
+		   ================================================================
+		   Convert a 2-letter ISO country code to a flag emoji.
+		   Works by mapping each letter to a Unicode Regional Indicator Symbol:
+		     'A' => 0x1F1E6, 'B' => 0x1F1E7, ... 'Z' => 0x1F1FF
+		   Pairing two of these gives the flag emoji for that country.
+		   Example: 'US' => 🇺🇸, 'CA' => 🇨🇦
+		*/
+		function codeToFlag(code) {
+			if (!code || code.length !== 2) return '';
+			var first  = 0x1F1E6 + (code.charCodeAt(0) - 65);
+			var second = 0x1F1E6 + (code.charCodeAt(1) - 65);
+			return String.fromCodePoint(first) + String.fromCodePoint(second);
+		}
+
+
+		/* ================================================================
 		   PRICING TABLE — Row highlighting
 		   ================================================================ */
 
-		/**
-		 * Update green highlight on rows that have at least one price entered.
-		 */
 		function updateRowHighlights() {
 			$tbody.find('tr').each(function() {
 				var $row = $(this);
@@ -69,12 +85,10 @@
 			});
 		}
 
-		/* Delegated input handler for real-time highlight updates. */
 		$table.on('input', '.geoprice-price-input', function() {
 			updateRowHighlights();
 		});
 
-		/* Initial highlight pass on page load. */
 		updateRowHighlights();
 
 
@@ -82,15 +96,10 @@
 		   PRICING TABLE — Remove country
 		   ================================================================ */
 
-		/**
-		 * Remove a country row when the Remove button is clicked.
-		 * Uses event delegation since rows can be added dynamically.
-		 */
 		$tbody.on('click', '.geoprice-remove-btn', function(e) {
 			e.preventDefault();
 			$(this).closest('tr').fadeOut(200, function() {
 				$(this).remove();
-				/* If the modal is open, refresh it to un-grey the removed country. */
 				if ($overlay.is(':visible')) {
 					renderModalList();
 				}
@@ -102,17 +111,10 @@
 		   PRICING TABLE — Add country row
 		   ================================================================ */
 
-		/**
-		 * Build and insert a new table row for a given country code.
-		 * Called when the admin clicks "+ Add" in the modal.
-		 *
-		 * @param {string} code ISO 3166-1 alpha-2 country code.
-		 */
 		function addCountryRow(code) {
 			var c = countries[code];
 			if (!c) return;
 
-			/* Don't add duplicates. */
 			if ($tbody.find('tr[data-code="' + code + '"]').length > 0) return;
 
 			var html = '<tr data-code="' + escAttr(code) + '">' +
@@ -146,7 +148,6 @@
 			$tbody.append($newRow);
 			$newRow.fadeIn(200);
 
-			/* Refresh modal to grey out the newly added country. */
 			if ($overlay.is(':visible')) {
 				renderModalList();
 			}
@@ -162,23 +163,21 @@
 			$search.val('');
 			renderModalList();
 			$overlay.fadeIn(150);
-			$search.focus();
+			/* Small delay so the fade-in is visible before focus shifts. */
+			setTimeout(function() { $search.focus(); }, 160);
 		});
 
-		/* Close on X button click. */
 		$overlay.on('click', '.geoprice-modal-close', function(e) {
 			e.preventDefault();
 			$overlay.fadeOut(150);
 		});
 
-		/* Close on overlay background click (not the modal itself). */
 		$overlay.on('click', function(e) {
 			if ($(e.target).is('.geoprice-modal-overlay')) {
 				$overlay.fadeOut(150);
 			}
 		});
 
-		/* Close on Escape key. */
 		$(document).on('keydown', function(e) {
 			if (e.key === 'Escape' && $overlay.is(':visible')) {
 				$overlay.fadeOut(150);
@@ -216,20 +215,12 @@
 
 		/* ================================================================
 		   MODAL — Render the country list
-		   ================================================================
-		   This is the core rendering function. It:
-		     1. Reads current search query, sort order, and group toggle.
-		     2. Builds an array of country entries from geoPriceData.
-		     3. Filters by search query.
-		     4. Sorts by selected order.
-		     5. Optionally groups by continent with sticky headers.
-		     6. Marks countries already in the pricing table as "Added".
-		     7. Outputs the HTML into the modal list container.
-		*/
+		   ================================================================ */
+
 		function renderModalList() {
-			var query     = ($search.val() || '').toLowerCase().trim();
-			var sortBy    = $sort.val();
-			var groupBy   = $group.is(':checked');
+			var query   = ($search.val() || '').toLowerCase().trim();
+			var sortBy  = $sort.val();
+			var groupBy = $group.is(':checked');
 
 			/* Build flat array of country objects. */
 			var entries = [];
@@ -243,7 +234,7 @@
 				});
 			});
 
-			/* Filter by search query. */
+			/* Filter by search query (matches name or code). */
 			if (query) {
 				entries = entries.filter(function(e) {
 					return e.name.toLowerCase().indexOf(query) !== -1 ||
@@ -262,7 +253,7 @@
 				});
 			}
 
-			/* Get set of country codes already in the pricing table. */
+			/* Determine which countries are already in the pricing table. */
 			var addedCodes = {};
 			$tbody.find('tr[data-code]').each(function() {
 				addedCodes[$(this).data('code')] = true;
@@ -272,9 +263,11 @@
 			var html = '';
 
 			if (entries.length === 0) {
-				html = '<div class="geoprice-modal-empty">No countries found.</div>';
+				html = '<div class="geoprice-modal-empty">' +
+					'<div class="geoprice-modal-empty-icon">&#x1F50D;</div>' +
+					'<div class="geoprice-modal-empty-text">No countries match your search.</div>' +
+				'</div>';
 			} else if (groupBy) {
-				/* Group by continent. */
 				var continentOrder = ['North America', 'South America', 'Europe', 'Asia', 'Africa', 'Oceania'];
 				var grouped = {};
 				$.each(entries, function(_, e) {
@@ -286,46 +279,54 @@
 
 				$.each(continentOrder, function(_, continent) {
 					if (!grouped[continent] || grouped[continent].length === 0) return;
-					html += '<div class="geoprice-modal-continent-header">' + escHtml(continent) + '</div>';
+					html += '<div class="geoprice-modal-continent-header">' +
+						escHtml(continent) +
+						' <span style="opacity:0.5;font-weight:400;">(' + grouped[continent].length + ')</span>' +
+					'</div>';
 					$.each(grouped[continent], function(_, e) {
 						html += buildModalRow(e, addedCodes);
 					});
 				});
 			} else {
-				/* Flat list. */
 				$.each(entries, function(_, e) {
 					html += buildModalRow(e, addedCodes);
 				});
 			}
 
 			$list.html(html);
-
-			/* Scroll to top when re-rendering. */
 			$list.scrollTop(0);
 		}
 
 		/**
-		 * Build the HTML for a single modal row.
+		 * Build the HTML for a single modal country row.
 		 *
-		 * @param {Object}  entry      Country object {code, name, currency, continent, population}.
-		 * @param {Object}  addedCodes Hash of country codes already in the pricing table.
-		 * @return {string} HTML string.
+		 * Layout: [Flag] [Name / Code · Currency] [+ Add | ✓ Added]
 		 */
 		function buildModalRow(entry, addedCodes) {
 			var isAdded = addedCodes[entry.code] || false;
 			var cls = 'geoprice-modal-row' + (isAdded ? ' geoprice-already-added' : '');
+			var flag = codeToFlag(entry.code);
 
-			var html = '<div class="' + cls + '">' +
-				'<span class="geoprice-modal-row-name">' +
-					escHtml(entry.name) +
-					' <span class="geoprice-modal-row-code">' + escHtml(entry.code) + '</span>' +
-				'</span>' +
-				'<span class="geoprice-modal-row-currency">' + escHtml(entry.currency) + '</span>';
+			var html = '<div class="' + cls + '">';
 
+			/* Flag emoji */
+			html += '<span class="geoprice-modal-row-flag">' + flag + '</span>';
+
+			/* Country info: name on line 1, code + currency on line 2 */
+			html += '<div class="geoprice-modal-row-info">' +
+				'<div class="geoprice-modal-row-name">' + escHtml(entry.name) + '</div>' +
+				'<div class="geoprice-modal-row-meta">' +
+					escHtml(entry.code) +
+					'<span class="geoprice-sep">&middot;</span>' +
+					escHtml(entry.currency) +
+				'</div>' +
+			'</div>';
+
+			/* Action: Add button or Added badge */
 			if (isAdded) {
-				html += '<span class="geoprice-modal-added-label">Added</span>';
+				html += '<span class="geoprice-modal-added-badge">&#10003; Added</span>';
 			} else {
-				html += '<button type="button" class="button button-secondary geoprice-modal-add-btn" data-code="' + escAttr(entry.code) + '">+ Add</button>';
+				html += '<button type="button" class="geoprice-modal-add-btn" data-code="' + escAttr(entry.code) + '">+ Add</button>';
 			}
 
 			html += '</div>';

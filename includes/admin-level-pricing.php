@@ -229,15 +229,23 @@ function geoprice_level_pricing_fields( $level ) {
 				</button>
 			</p>
 
-			<!-- Country picker modal (hidden by default, shown by JS). -->
+			<!--
+				Country picker modal.
+				Hidden by default; shown when "+ Add Country" is clicked.
+				The list inside is rendered dynamically by admin.js using
+				country data passed via wp_localize_script().
+			-->
 			<div id="geoprice-modal-overlay" class="geoprice-modal-overlay" style="display:none;">
 				<div class="geoprice-modal">
 					<div class="geoprice-modal-header">
-						<h3><?php esc_html_e( 'Add Country', 'geoprice-for-pmpro' ); ?></h3>
+						<h3><?php echo esc_html__( 'Add Country', 'geoprice-for-pmpro' ); ?></h3>
 						<button type="button" class="geoprice-modal-close" aria-label="<?php esc_attr_e( 'Close', 'geoprice-for-pmpro' ); ?>">&times;</button>
 					</div>
 					<div class="geoprice-modal-controls">
-						<input type="text" id="geoprice-modal-search" class="regular-text" placeholder="<?php esc_attr_e( 'Search countries...', 'geoprice-for-pmpro' ); ?>" />
+						<input type="text"
+							id="geoprice-modal-search"
+							placeholder="&#x1F50D; <?php esc_attr_e( 'Search countries...', 'geoprice-for-pmpro' ); ?>"
+							autocomplete="off" />
 						<select id="geoprice-modal-sort">
 							<option value="alpha"><?php esc_html_e( 'Sort: A \u2192 Z', 'geoprice-for-pmpro' ); ?></option>
 							<option value="population"><?php esc_html_e( 'Sort: Population', 'geoprice-for-pmpro' ); ?></option>
