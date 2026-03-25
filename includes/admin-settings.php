@@ -544,11 +544,17 @@ function geoprice_settings_page() {
 								/*
 								 * Display the last update time using the site's configured
 								 * date and time format (Settings → General) for consistency.
+								 *
+								 * wp_date() (introduced WP 5.3) automatically converts the
+								 * Unix timestamp to the site's local timezone configured in
+								 * Settings → General → Timezone. This replaces the previous
+								 * date_i18n() call which treated the timestamp as UTC and
+								 * displayed the wrong time for non-UTC sites.
 								 */
 								printf(
 									/* translators: %s: date/time of last update */
 									esc_html__( 'Last updated: %s', 'geoprice-for-pmpro' ),
-									esc_html( date_i18n( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $rates_updated ) )
+									esc_html( wp_date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $rates_updated ) )
 								);
 								?>
 							</p>
