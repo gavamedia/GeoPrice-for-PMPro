@@ -46,8 +46,8 @@
  *      - On each PMPro membership level edit page, a "Geographic Pricing"
  *        section is injected below the existing billing settings.
  *      - The admin enters custom USD prices (initial_payment, billing_amount)
- *        for specific countries. The top 20 countries by population are shown
- *        by default; a "Show All Countries" button reveals all ~195 countries.
+ *        for specific countries. US, CA, and MX are shown by default; an
+ *        "+ Add Country" button opens a modal to add any of ~195 countries.
  *      - Prices are stored as JSON in PMPro's level meta table using the
  *        key 'geoprice_prices'. Example stored value:
  *        {"CA":{"initial_payment":"29.00","billing_amount":"29.00"},
@@ -93,8 +93,8 @@
  *   geoprice-for-pmpro.php .............. This file. Plugin bootstrap, constants,
  *                                          dependency check, cron scheduling.
  *   includes/countries.php .............. Static data: all countries with ISO codes,
- *                                          currency codes, currency symbols, and
- *                                          the "top 20 by population" list.
+ *                                          currency codes, currency symbols, continents,
+ *                                          populations, and the default country list.
  *   includes/geolocation.php ........... IP-to-country detection with multi-provider
  *                                          support, caching (transient + cookie),
  *                                          and admin testing override.

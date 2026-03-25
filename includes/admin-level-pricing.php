@@ -38,25 +38,16 @@
  *     "IN": { "initial_payment": "9.00", "billing_amount": "9.00" }
  *   }
  *
- *   Each country entry has up to two keys:
- *     - initial_payment: The one-time payment charged at signup (in USD).
- *     - billing_amount: The recurring payment amount (in USD).
- *   Both are optional — if a country entry only has billing_amount, the level's
- *   default initial_payment is used for that country (and vice versa).
- *
- *   Countries with no entry use the level's default pricing (set in PMPro's
- *   own billing fields above our section).
- *
  * ADMIN UI DESIGN:
- *   - The table shows all ~195 countries, but only the top 20 (by population)
- *     are visible by default. The rest are hidden and revealed by "Show All Countries."
- *   - Countries that already have saved prices are always visible, even if they're
- *     not in the top 20. This prevents confusion when a price is set for a
- *     lesser-known country and the admin can't see it.
- *   - Each row has two input fields (initial_payment, billing_amount) with a "$"
- *     prefix and "default" placeholder text. Empty fields mean "use level default."
- *   - Rows with prices entered are highlighted green for quick visual scanning.
- *   - A search/filter input lets the admin quickly find any country by name.
+ *   - By default, only US, CA, and MX are shown in the pricing table.
+ *   - An "+ Add Country" button opens a modal popup with all ~195 countries.
+ *   - The modal supports search/filter, sorting (alphabetical, population),
+ *     and grouping by continent.
+ *   - Each country in the modal has an "+ Add" button that instantly adds it
+ *     to the pricing table (no page refresh).
+ *   - Each country row in the table has a "Remove" button to remove it (no
+ *     page refresh). Removing clears that country's prices on next save.
+ *   - Countries with saved prices are always shown in the table on page load.
  *
  * FORM FIELD NAMING:
  *   Inputs are named: geoprice_prices[{COUNTRY_CODE}][initial_payment]
@@ -90,16 +81,12 @@ defined( 'ABSPATH' ) || exit;
  *     2. The 'edit' query parameter being present (we're editing a level,
  *        not viewing the level list).
  *
- *   This prevents our CSS/JS from being loaded on unrelated admin pages,
- *   which would be wasteful and could cause conflicts.
+ * LOCALIZED DATA:
+ *   We pass the full country dataset to JavaScript via wp_localize_script().
+ *   This gives the modal popup access to all countries, their continents,
+ *   populations, and currencies for client-side sorting/filtering/grouping.
  *
- * ASSETS:
- *   - admin.css: Styles for the country pricing table (borders, spacing, colors).
- *   - admin.js: jQuery script for show/hide countries, search filter, and
- *     row highlighting. Depends on jQuery (which WordPress already loads in admin).
- *
- * @param string $hook The WordPress admin page hook suffix. Each admin page has a
- *                     unique hook suffix used for conditional asset loading.
+ * @param string $hook The WordPress admin page hook suffix.
  * @return void
  */
 function geoprice_admin_enqueue_scripts( $hook ) {
@@ -113,18 +100,37 @@ function geoprice_admin_enqueue_scripts( $hook ) {
 	}
 
 	wp_enqueue_style(
-		'geoprice-admin',                              // Handle (unique identifier for this stylesheet).
-		GEOPRICE_PMPRO_URL . 'assets/css/admin.css',   // URL to the CSS file.
-		array(),                                       // Dependencies (none — standalone styles).
-		GEOPRICE_PMPRO_VERSION                         // Version (for cache-busting on plugin updates).
+		'geoprice-admin',
+		GEOPRICE_PMPRO_URL . 'assets/css/admin.css',
+		array(),
+		GEOPRICE_PMPRO_VERSION
 	);
 	wp_enqueue_script(
-		'geoprice-admin',                              // Handle (unique identifier for this script).
-		GEOPRICE_PMPRO_URL . 'assets/js/admin.js',    // URL to the JS file.
-		array( 'jquery' ),                             // Dependencies (needs jQuery for DOM manipulation).
-		GEOPRICE_PMPRO_VERSION,                        // Version (for cache-busting).
-		true                                           // Load in footer (after DOM is ready).
+		'geoprice-admin',
+		GEOPRICE_PMPRO_URL . 'assets/js/admin.js',
+		array( 'jquery' ),
+		GEOPRICE_PMPRO_VERSION,
+		true
 	);
+
+	/*
+	 * Pass the full country dataset to JavaScript so the modal popup can
+	 * render, sort, filter, and group countries entirely client-side.
+	 * This avoids AJAX round-trips for what is static reference data.
+	 */
+	$countries  = geoprice_get_all_countries();
+	$js_countries = array();
+	foreach ( $countries as $code => $data ) {
+		$js_countries[ $code ] = array(
+			'name'       => $data['name'],
+			'currency'   => $data['currency'],
+			'continent'  => $data['continent'],
+			'population' => $data['population'],
+		);
+	}
+	wp_localize_script( 'geoprice-admin', 'geoPriceData', array(
+		'countries' => $js_countries,
+	) );
 }
 add_action( 'admin_enqueue_scripts', 'geoprice_admin_enqueue_scripts' );
 
@@ -132,51 +138,27 @@ add_action( 'admin_enqueue_scripts', 'geoprice_admin_enqueue_scripts' );
  * Render the per-country pricing fields on the level edit page.
  *
  * This is the main admin UI function. It outputs the "Geographic Pricing" section
- * with the country pricing table, show/hide buttons, and search filter.
- *
- * HOW DATA FLOWS:
- *   1. When the page loads, we read any existing prices from level meta.
- *   2. We render each country row with the saved prices (or empty fields).
- *   3. When the admin submits the form, PMPro processes its own fields first,
- *      then fires pmpro_save_membership_level, which triggers our save handler.
+ * with:
+ *   - A compact pricing table showing only active countries (defaults + saved).
+ *   - An "+ Add Country" button that opens a modal for adding more countries.
+ *   - A hidden modal popup with search, sort, and group-by-continent features.
  *
  * SECTION PLACEMENT TECHNIQUE:
  *   We hook into `pmpro_membership_level_after_trial_settings` which fires
- *   INSIDE the Billing Details section's inner wrapper. To create our own
- *   standalone collapsible section (rather than being nested inside Billing
- *   Details), we use a standard PMPro add-on technique:
+ *   INSIDE the Billing Details section. We close PMPro's wrappers, render our
+ *   own section, then re-open dummy wrappers for valid HTML.
  *
- *   1. Close the current section's </div></div> wrappers (pmpro_section_inside
- *      and pmpro_section).
- *   2. Render our own complete pmpro_section with toggle button and inner content.
- *   3. Re-open <div><div> wrappers so PMPro's own closing </div></div> tags
- *      (which follow the hook) produce valid HTML.
- *
- *   This positions Geographic Pricing as a top-level collapsible section
- *   directly below Billing Details, matching PMPro's native UI.
- *
- * PMPRO HOOK USED:
- *   `pmpro_membership_level_after_trial_settings` receives the $level object
- *   as its only parameter. This object contains the level's current data
- *   (id, name, initial_payment, billing_amount, etc.) as loaded from the database.
- *   We use $level->id to look up our per-country prices from level meta.
- *
- * @param object $level The PMPro membership level object. Key properties:
- *                      - id: (int) Level ID. May be empty for new (unsaved) levels.
- *                      - name: (string) Level name.
- *                      - initial_payment: (string) Default initial payment in USD.
- *                      - billing_amount: (string) Default recurring amount in USD.
+ * @param object $level The PMPro membership level object.
  * @return void
  */
 function geoprice_level_pricing_fields( $level ) {
-	$countries    = geoprice_get_all_countries();
-	$top_codes    = geoprice_get_top_countries();
-	$saved_prices = array();
+	$countries      = geoprice_get_all_countries();
+	$default_codes  = geoprice_get_default_countries();
+	$saved_prices   = array();
 
 	/*
 	 * Load existing per-country prices from level meta.
 	 * Only attempt this if the level has been saved (has an ID).
-	 * New levels that haven't been saved yet won't have any meta.
 	 */
 	if ( ! empty( $level->id ) ) {
 		$meta = get_pmpro_membership_level_meta( $level->id, 'geoprice_prices', true );
@@ -189,31 +171,14 @@ function geoprice_level_pricing_fields( $level ) {
 	}
 
 	/*
-	 * Add our own nonce field to the form for CSRF protection.
-	 * PMPro's form already has its own nonce, but we add a separate one
-	 * specifically for our data so we can verify it independently in
-	 * our save handler. This follows WordPress security best practices.
+	 * Determine which countries to show in the table on page load:
+	 *   1. Default countries (US, CA, MX) — always shown.
+	 *   2. Any country with saved pricing data — always shown.
+	 * Merge and deduplicate.
 	 */
-	wp_nonce_field( 'geoprice_save_prices', 'geoprice_nonce' );
+	$active_codes = array_unique( array_merge( $default_codes, array_keys( $saved_prices ) ) );
 
-	/*
-	 * SECTION INJECTION TECHNIQUE:
-	 *
-	 * This hook fires INSIDE the Content Settings section's pmpro_section_inside div.
-	 * PMPro's template will output </div></div> after this hook returns, closing
-	 * the Content Settings section.
-	 *
-	 * To render our own top-level collapsible section, we:
-	 *   1. Close the current section's wrappers (</div> pmpro_section_inside,
-	 *      </div> pmpro_section).
-	 *   2. Output our complete pmpro_section with its own toggle and inner content.
-	 *   3. Re-open dummy <div><div> wrappers that PMPro's closing tags will close
-	 *      harmlessly — producing valid HTML with no visible side effects.
-	 *
-	 * This is a well-established pattern used by PMPro add-ons (e.g., PMPro
-	 * Variable Pricing, PMPro Sponsored Members) to inject standalone sections
-	 * into the level edit page from "after_*_settings" hooks.
-	 */
+	wp_nonce_field( 'geoprice_save_prices', 'geoprice_nonce' );
 	?>
 	<?php // Step 1: Close Billing Details section wrappers. ?>
 	</div> <!-- close pmpro_section_inside (Billing Details) -->
@@ -232,11 +197,6 @@ function geoprice_level_pricing_fields( $level ) {
 				<?php esc_html_e( 'Set custom USD prices per country. Leave blank to use the default prices, set in the "Billing Details" area above. Visitors will see amounts converted to their local currency.', 'geoprice-for-pmpro' ); ?>
 			</p>
 
-			<!--
-				The pricing table. Each row represents one country with two price fields.
-				The table uses PMPro's "widefat" class for consistent admin styling,
-				plus our own "geoprice-country-table" class for custom styling.
-			-->
 			<table class="geoprice-country-table widefat" id="geoprice-country-table">
 				<thead>
 					<tr>
@@ -244,72 +204,62 @@ function geoprice_level_pricing_fields( $level ) {
 						<th class="geoprice-col-currency"><?php esc_html_e( 'Local Currency', 'geoprice-for-pmpro' ); ?></th>
 						<th class="geoprice-col-price"><?php esc_html_e( 'Initial Payment (USD)', 'geoprice-for-pmpro' ); ?></th>
 						<th class="geoprice-col-price"><?php esc_html_e( 'Renewal Amount (USD)', 'geoprice-for-pmpro' ); ?></th>
+						<th class="geoprice-col-actions">&nbsp;</th>
 					</tr>
 				</thead>
-				<tbody>
+				<tbody id="geoprice-country-tbody">
 					<?php
 					/*
-					 * RENDERING ORDER:
-					 * 1. Top 20 countries first (always visible) — these are the most
-					 *    commonly configured and most likely to be relevant.
-					 * 2. All remaining countries (hidden by default, revealed by "Show All").
-					 *
-					 * Countries in the "extra" group that have saved prices are ALSO
-					 * shown initially (see geoprice_render_country_row's $style logic)
-					 * so admins can always see what they've configured.
+					 * Render only the active countries (defaults + saved).
+					 * The JS will handle adding more rows dynamically via the modal.
 					 */
-
-					// Render top 20 countries (always visible, marked as geoprice-top-country).
-					foreach ( $top_codes as $code ) {
+					foreach ( $active_codes as $code ) {
 						if ( isset( $countries[ $code ] ) ) {
-							geoprice_render_country_row( $code, $countries[ $code ], $saved_prices, false );
+							geoprice_render_country_row( $code, $countries[ $code ], $saved_prices );
 						}
-					}
-
-					// Render remaining countries (hidden by default, marked as geoprice-extra-country).
-					foreach ( $countries as $code => $data ) {
-						if ( in_array( $code, $top_codes, true ) ) {
-							continue; // Already rendered above.
-						}
-						geoprice_render_country_row( $code, $data, $saved_prices, true );
 					}
 					?>
 				</tbody>
 			</table>
 
-			<!--
-				Toggle buttons and search filter below the table.
-				- "Show All Countries" reveals the hidden geoprice-extra-country rows.
-				- "Show Top 20 Only" hides them again (keeping rows with prices visible).
-				- The search filter searches ALL countries by name regardless of visibility state.
-				These are handled by admin.js.
-			-->
-			<p class="geoprice-toggle-wrap">
-				<button type="button" class="button button-secondary" id="geoprice-show-more">
-					<?php esc_html_e( 'Show All Countries', 'geoprice-for-pmpro' ); ?>
+			<p class="geoprice-actions-wrap">
+				<button type="button" class="button button-secondary" id="geoprice-add-country-btn">
+					<span class="dashicons dashicons-plus-alt2" style="vertical-align: middle; margin-top: -2px;"></span>
+					<?php esc_html_e( 'Add Country', 'geoprice-for-pmpro' ); ?>
 				</button>
-				<button type="button" class="button button-secondary" id="geoprice-hide-more" style="display:none;">
-					<?php esc_html_e( 'Show Top 20 Only', 'geoprice-for-pmpro' ); ?>
-				</button>
-				<span class="geoprice-filter-wrap">
-					<input type="text" id="geoprice-filter" placeholder="<?php esc_attr_e( 'Filter countries...', 'geoprice-for-pmpro' ); ?>" class="regular-text" />
-				</span>
 			</p>
+
+			<!-- Country picker modal (hidden by default, shown by JS). -->
+			<div id="geoprice-modal-overlay" class="geoprice-modal-overlay" style="display:none;">
+				<div class="geoprice-modal">
+					<div class="geoprice-modal-header">
+						<h3><?php esc_html_e( 'Add Country', 'geoprice-for-pmpro' ); ?></h3>
+						<button type="button" class="geoprice-modal-close" aria-label="<?php esc_attr_e( 'Close', 'geoprice-for-pmpro' ); ?>">&times;</button>
+					</div>
+					<div class="geoprice-modal-controls">
+						<input type="text" id="geoprice-modal-search" class="regular-text" placeholder="<?php esc_attr_e( 'Search countries...', 'geoprice-for-pmpro' ); ?>" />
+						<select id="geoprice-modal-sort">
+							<option value="alpha"><?php esc_html_e( 'Sort: A \u2192 Z', 'geoprice-for-pmpro' ); ?></option>
+							<option value="population"><?php esc_html_e( 'Sort: Population', 'geoprice-for-pmpro' ); ?></option>
+						</select>
+						<label class="geoprice-modal-group-label">
+							<input type="checkbox" id="geoprice-modal-group" />
+							<?php esc_html_e( 'Group by Continent', 'geoprice-for-pmpro' ); ?>
+						</label>
+					</div>
+					<div class="geoprice-modal-list" id="geoprice-modal-list">
+						<!-- Populated dynamically by admin.js -->
+					</div>
+				</div>
+			</div>
+
 		</div> <!-- end pmpro_section_inside (Geographic Pricing) -->
 	</div> <!-- end pmpro_section (Geographic Pricing) -->
 
 	<?php
 	/*
-	 * Step 3: Re-open dummy wrappers.
-	 *
-	 * After this function returns, PMPro's template outputs:
-	 *   </div> <!-- end pmpro_section_inside -->
-	 *   </div> <!-- end pmpro_section -->
-	 *
-	 * Those closing tags originally belong to Content Settings, but we already
-	 * closed them in Step 1. We must re-open matching <div> tags here so
-	 * PMPro's closing tags produce valid HTML. These empty wrappers are
-	 * invisible — they contain no content and collapse to zero height.
+	 * Step 3: Re-open dummy wrappers so PMPro's closing </div></div> tags
+	 * (which follow this hook) produce valid HTML.
 	 */
 	?>
 	<div class="pmpro_section" style="display:none;">
@@ -325,49 +275,22 @@ add_action( 'pmpro_membership_level_after_trial_settings', 'geoprice_level_prici
  *   - Country name and ISO code (display only).
  *   - Local currency code (display only, informational for the admin).
  *   - Initial Payment input field (USD amount, or empty for "use default").
- *   - Billing Amount input field (USD amount, or empty for "use default").
+ *   - Renewal Amount input field (USD amount, or empty for "use default").
+ *   - Remove button to remove the country from the table.
  *
- * VISIBILITY LOGIC:
- *   - Top 20 countries ($hidden=false): Always visible, class "geoprice-top-country".
- *   - Other countries ($hidden=true): Hidden by default UNLESS they have a saved price.
- *     This ensures the admin always sees countries they've configured prices for,
- *     even without clicking "Show All Countries."
- *
- * DATA ATTRIBUTES:
- *   - data-country: Lowercase country name, used by admin.js for the search filter.
- *     The filter does a simple substring match: typing "can" matches "canada".
- *
- * INPUT VALIDATION:
- *   - pattern="[0-9]*\.?[0-9]*" provides browser-level validation for decimal numbers.
- *   - inputmode="decimal" shows a numeric keyboard on mobile devices.
- *   - Server-side validation in geoprice_save_level_pricing() is the authoritative check.
+ * The row's data-code attribute is used by admin.js to identify which country
+ * this row represents (for duplicate prevention and removal).
  *
  * @param string $code         ISO 3166-1 alpha-2 country code (e.g., 'CA', 'MX').
- * @param array  $data         Country data array: { 'name' => string, 'currency' => string }.
- * @param array  $saved_prices All saved prices for this level: { 'CA' => {...}, 'MX' => {...} }.
- * @param bool   $hidden       Whether this country is in the "extra" (non-top-20) group.
+ * @param array  $data         Country data array with 'name', 'currency', etc.
+ * @param array  $saved_prices All saved prices for this level.
  * @return void
  */
-function geoprice_render_country_row( $code, $data, $saved_prices, $hidden ) {
-	/* Extract saved values for this country (empty string if not set). */
+function geoprice_render_country_row( $code, $data, $saved_prices ) {
 	$initial = isset( $saved_prices[ $code ]['initial_payment'] ) ? $saved_prices[ $code ]['initial_payment'] : '';
 	$billing = isset( $saved_prices[ $code ]['billing_amount'] ) ? $saved_prices[ $code ]['billing_amount'] : '';
-
-	/* A row "has a price" if either field has a value — used for highlighting and visibility. */
-	$has_price = '' !== $initial || '' !== $billing;
-
-	/* CSS class determines whether the row is top-20 (always shown) or extra (togglable). */
-	$row_class = $hidden ? 'geoprice-extra-country' : 'geoprice-top-country';
-
-	/*
-	 * Inline style: extra countries are hidden by default, BUT if the row has
-	 * a saved price, it's shown regardless. This way, if an admin set a price
-	 * for, say, Singapore (not top 20), they'll still see it without having
-	 * to expand the full list.
-	 */
-	$style = ( $hidden && ! $has_price ) ? 'display:none;' : '';
 	?>
-	<tr class="<?php echo esc_attr( $row_class ); ?>" data-country="<?php echo esc_attr( strtolower( $data['name'] ) ); ?>" style="<?php echo esc_attr( $style ); ?>">
+	<tr data-code="<?php echo esc_attr( $code ); ?>">
 		<td class="geoprice-col-country">
 			<strong><?php echo esc_html( $data['name'] ); ?></strong>
 			<span class="geoprice-country-code">(<?php echo esc_html( $code ); ?>)</span>
@@ -376,7 +299,6 @@ function geoprice_render_country_row( $code, $data, $saved_prices, $hidden ) {
 			<?php echo esc_html( $data['currency'] ); ?>
 		</td>
 		<td class="geoprice-col-price">
-			<!-- "$" prefix is visual-only — the input value is the numeric amount. -->
 			<span class="geoprice-dollar-prefix">$</span>
 			<input type="text"
 				name="geoprice_prices[<?php echo esc_attr( $code ); ?>][initial_payment]"
@@ -396,6 +318,11 @@ function geoprice_render_country_row( $code, $data, $saved_prices, $hidden ) {
 				pattern="[0-9]*\.?[0-9]*"
 				inputmode="decimal" />
 		</td>
+		<td class="geoprice-col-actions">
+			<button type="button" class="button button-link-delete geoprice-remove-btn" title="<?php esc_attr_e( 'Remove', 'geoprice-for-pmpro' ); ?>">
+				<span class="dashicons dashicons-no-alt"></span>
+			</button>
+		</td>
 	</tr>
 	<?php
 }
@@ -405,53 +332,31 @@ function geoprice_render_country_row( $code, $data, $saved_prices, $hidden ) {
  *
  * WHEN THIS FIRES:
  *   PMPro fires `pmpro_save_membership_level` after it has saved the level's
- *   own data (name, description, initial_payment, billing_amount, etc.) to
- *   the pmpro_membership_levels table. At this point, the level ID ($level_id)
- *   is guaranteed to exist in the database.
+ *   own data to the pmpro_membership_levels table. The level ID ($level_id)
+ *   is guaranteed to exist at this point.
  *
  * WHAT THIS DOES:
  *   1. Verifies our nonce (CSRF protection).
  *   2. Checks user capability.
  *   3. Iterates through the submitted geoprice_prices array.
- *   4. Validates each country code against the known list (rejects invalid codes).
- *   5. Validates each price as numeric (rejects non-numeric strings).
- *   6. Normalizes prices to 2-decimal format (e.g., "29" → "29.00").
- *   7. Stores only countries that have at least one price set (strips empty entries).
- *   8. Saves the final array as JSON in level meta.
+ *   4. Validates each country code against the known list.
+ *   5. Validates each price as numeric, rejects negatives.
+ *   6. Normalizes prices to 2-decimal format.
+ *   7. Saves the final array as JSON in level meta.
  *
- * EMPTY FIELDS:
- *   If both initial_payment and billing_amount are empty for a country, that
- *   country is excluded from the saved data. This means: "use the level's
- *   default price for this country" — no custom pricing.
- *
- * STORAGE FORMAT:
- *   The prices array is serialized as JSON and stored in a single level meta entry:
- *     meta_key: 'geoprice_prices'
- *     meta_value: '{"CA":{"initial_payment":"29.00","billing_amount":"29.00"},...}'
- *
- *   Using JSON (rather than separate meta entries per country) keeps the database
- *   clean — one row per level instead of potentially 195 rows per level.
+ * NOTE: Only countries with rows in the table (added via the modal or defaults)
+ * will have form inputs submitted. Countries that were "removed" have no inputs
+ * in the DOM, so they won't appear in $_POST and their prices are effectively
+ * deleted on save.
  *
  * @param int $level_id The ID of the membership level that was just saved.
  * @return void
  */
 function geoprice_save_level_pricing( $level_id ) {
-	/*
-	 * Security check 1: Verify our nonce.
-	 * The nonce was added to the form by wp_nonce_field() in geoprice_level_pricing_fields().
-	 * If the nonce is missing or invalid, this is either a direct POST (not from our form)
-	 * or a CSRF attack. Bail silently.
-	 */
 	if ( ! isset( $_POST['geoprice_nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['geoprice_nonce'] ) ), 'geoprice_save_prices' ) ) {
 		return;
 	}
 
-	/*
-	 * Security check 2: Verify user capability.
-	 * Even though PMPro already checks this in its own save handler, we check
-	 * again here as defense-in-depth. Our nonce alone doesn't guarantee that
-	 * the user has the right permissions.
-	 */
 	if ( ! current_user_can( 'pmpro_membershiplevels' ) ) {
 		return;
 	}
@@ -461,18 +366,9 @@ function geoprice_save_level_pricing( $level_id ) {
 	if ( ! empty( $_POST['geoprice_prices'] ) && is_array( $_POST['geoprice_prices'] ) ) {
 		$countries = geoprice_get_all_countries();
 
-		/*
-		 * Iterate through each submitted country.
-		 * The form submits ALL ~195 countries (even hidden ones), but most
-		 * will have empty values. We only store countries with actual prices.
-		 */
 		foreach ( $_POST['geoprice_prices'] as $country_code => $values ) {
 			$country_code = sanitize_text_field( $country_code );
 
-			/*
-			 * Validate the country code against our known list.
-			 * This prevents injection of arbitrary keys into our JSON data.
-			 */
 			if ( ! isset( $countries[ $country_code ] ) ) {
 				continue;
 			}
@@ -480,39 +376,22 @@ function geoprice_save_level_pricing( $level_id ) {
 			$initial = isset( $values['initial_payment'] ) ? sanitize_text_field( $values['initial_payment'] ) : '';
 			$billing = isset( $values['billing_amount'] ) ? sanitize_text_field( $values['billing_amount'] ) : '';
 
-			/* Only process if at least one field has a value. */
 			if ( '' !== $initial || '' !== $billing ) {
 				$entry = array();
 
-				/*
-				 * Validate each price as numeric and normalize to 2-decimal format.
-				 * is_numeric() accepts integers, floats, and numeric strings.
-				 * number_format() normalizes to exactly 2 decimal places:
-				 *   "29" → "29.00", "19.5" → "19.50", "9.99" → "9.99".
-				 * Non-numeric values (e.g., "abc") are silently dropped.
-				 */
 				if ( '' !== $initial && is_numeric( $initial ) ) {
-					/*
-					 * Reject negative price values.
-					 * Negative numbers like "-10.00" pass is_numeric() but could
-					 * create credits instead of charges if stored.
-					 * abs() converts negatives to positive (preserving admin intent),
-					 * and > 0 check excludes zero-amount prices.
-					 */
 					$initial_val = abs( (float) $initial );
 					if ( $initial_val > 0 ) {
 						$entry['initial_payment'] = number_format( $initial_val, 2, '.', '' );
 					}
 				}
 				if ( '' !== $billing && is_numeric( $billing ) ) {
-					/* Same negative-value protection as above. */
 					$billing_val = abs( (float) $billing );
 					if ( $billing_val > 0 ) {
 						$entry['billing_amount'] = number_format( $billing_val, 2, '.', '' );
 					}
 				}
 
-				/* Only store the entry if at least one valid price was parsed. */
 				if ( ! empty( $entry ) ) {
 					$prices[ $country_code ] = $entry;
 				}
@@ -520,17 +399,6 @@ function geoprice_save_level_pricing( $level_id ) {
 		}
 	}
 
-	/*
-	 * Save the prices as a JSON string in level meta.
-	 *
-	 * We ALWAYS save (even if $prices is empty) to clear out any previously
-	 * saved prices if the admin removed all country-specific pricing. An empty
-	 * JSON object '{}' effectively means "no custom pricing for any country."
-	 *
-	 * update_pmpro_membership_level_meta() is PMPro's wrapper around WordPress's
-	 * update_metadata() function. It stores data in the wp_pmpro_membership_levelmeta
-	 * table with the given level ID and meta key.
-	 */
 	update_pmpro_membership_level_meta( $level_id, 'geoprice_prices', wp_json_encode( $prices ) );
 }
 add_action( 'pmpro_save_membership_level', 'geoprice_save_level_pricing' );

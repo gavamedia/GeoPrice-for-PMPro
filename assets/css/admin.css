@@ -5,12 +5,6 @@
  * (admin.php?page=pmpro-membershiplevels&edit=X). See admin-level-pricing.php
  * for the conditional enqueue logic.
  *
- * DESIGN GOALS:
- *   - Match WordPress admin UI conventions (colors, spacing, typography).
- *   - Make the country pricing table scannable at a glance.
- *   - Visually distinguish countries that have custom prices (green highlight).
- *   - Keep the section clearly separated from PMPro's own settings above it.
- *
  * @package   GeoPrice_For_PMPro
  * @copyright 2024-2026 GAVAMEDIA Corporation (https://gavamedia.com)
  * @license   GPL-2.0-or-later
@@ -18,75 +12,46 @@
 
 
 /* ==========================================================================
-   Section container
-   ==========================================================================
-   Separates the GeoPrice section from PMPro's settings above with a top
-   border and vertical spacing. This makes it clear that "Geographic Pricing"
-   is a distinct section, not part of PMPro's "Other Settings." */
-
-#geoprice-pricing-section {
-	margin-top: 30px;
-	padding-top: 20px;
-	border-top: 1px solid #c3c4c7; /* WordPress admin border color */
-}
-
-.geoprice-section-title {
-	font-size: 1.3em;
-	margin-bottom: 5px;
-}
-
-
-/* ==========================================================================
    Country pricing table — structure
-   ==========================================================================
-   The table lists all countries with their currency info and price inputs.
-   Uses border-collapse for clean cell borders without doubled-up lines. */
+   ========================================================================== */
 
 .geoprice-country-table {
-	margin-top: 15px;
+	margin-top: 10px;
 	border-collapse: collapse;
 }
 
-/* Column headers: gray background with a bottom border, matching WP admin tables. */
 .geoprice-country-table thead th {
-	background: #f0f0f1;        /* WordPress admin light gray */
+	background: #f0f0f1;
 	padding: 10px 12px;
 	text-align: left;
 	font-weight: 600;
 	border-bottom: 2px solid #c3c4c7;
 }
 
-/* Row borders: subtle horizontal lines between country rows. */
 .geoprice-country-table tbody tr {
 	border-bottom: 1px solid #e0e0e0;
 }
 
-/* Hover highlight: light gray background on row hover for easier scanning
-   when the admin is looking through many countries. */
 .geoprice-country-table tbody tr:hover {
 	background-color: #f6f7f7;
 }
 
 
 /* ==========================================================================
-   Country pricing table — row highlighting for countries with prices
-   ==========================================================================
-   Rows where the admin has entered at least one price value are highlighted
-   green. This provides instant visual feedback about which countries have
-   custom pricing configured. The JS in admin.js adds/removes the
-   'geoprice-has-price' class dynamically as the admin types. */
+   Row highlighting for countries with prices
+   ========================================================================== */
 
 .geoprice-country-table tbody tr.geoprice-has-price {
-	background-color: #e8f5e9;  /* Light green — "this country has a price" */
+	background-color: #e8f5e9;
 }
 
 .geoprice-country-table tbody tr.geoprice-has-price:hover {
-	background-color: #dcedc8;  /* Slightly darker green on hover */
+	background-color: #dcedc8;
 }
 
 
 /* ==========================================================================
-   Country pricing table — cell styling
+   Table cell styling
    ========================================================================== */
 
 .geoprice-country-table td {
@@ -94,50 +59,42 @@
 	vertical-align: middle;
 }
 
-/* Country name column: wide enough to fit long names like
-   "Saint Vincent and the Grenadines" without wrapping. */
 .geoprice-col-country {
 	min-width: 200px;
 }
 
-/* Currency code column: shows "CAD", "EUR", etc. Gray text because this
-   is reference info, not interactive. */
 .geoprice-col-currency {
 	min-width: 70px;
 	color: #666;
 }
 
-/* Price input columns: enough width for the "$" prefix + input field.
-   nowrap prevents the "$" and input from wrapping to separate lines. */
 .geoprice-col-price {
 	min-width: 160px;
 	white-space: nowrap;
 }
 
+.geoprice-col-actions {
+	width: 40px;
+	text-align: center;
+}
+
 
 /* ==========================================================================
-   Country pricing table — inline elements
+   Inline elements
    ========================================================================== */
 
-/* Country code shown in parentheses after the name, e.g., "Canada (CA)".
-   Dimmed because it's secondary info — the country name is primary. */
 .geoprice-country-code {
 	color: #888;
 	font-size: 0.9em;
 	margin-left: 4px;
 }
 
-/* Dollar sign prefix before each price input. Styled as a visual label,
-   not an interactive element. Bold gray to be visible but not dominant. */
 .geoprice-dollar-prefix {
 	color: #888;
 	margin-right: 2px;
 	font-weight: 600;
 }
 
-/* Price input fields: compact width (90px fits amounts up to "9999.99"),
-   right-aligned so decimal points line up when scanning vertically.
-   !important overrides WordPress's default .small-text width. */
 .geoprice-price-input {
 	width: 90px !important;
 	text-align: right;
@@ -145,24 +102,242 @@
 
 
 /* ==========================================================================
-   Toggle buttons and search filter (below the table)
-   ==========================================================================
-   Flexbox layout puts the Show/Hide buttons on the left and the search
-   filter on the right (pushed there by margin-left: auto on the filter wrap). */
+   Remove button (in each table row)
+   ========================================================================== */
 
-.geoprice-toggle-wrap {
-	margin-top: 15px;
+.geoprice-remove-btn {
+	cursor: pointer;
+	padding: 0 !important;
+	min-height: 0 !important;
+	border: none !important;
+	background: none !important;
+	color: #b32d2e !important;
+	opacity: 0.5;
+	transition: opacity 0.15s;
+}
+
+.geoprice-remove-btn:hover,
+.geoprice-remove-btn:focus {
+	opacity: 1;
+}
+
+.geoprice-remove-btn .dashicons {
+	font-size: 20px;
+	width: 20px;
+	height: 20px;
+}
+
+
+/* ==========================================================================
+   Add Country button area
+   ========================================================================== */
+
+.geoprice-actions-wrap {
+	margin-top: 12px;
+}
+
+.geoprice-actions-wrap .dashicons {
+	font-size: 16px;
+	width: 16px;
+	height: 16px;
+	margin-right: 2px;
+}
+
+
+/* ==========================================================================
+   Modal overlay and container
+   ========================================================================== */
+
+.geoprice-modal-overlay {
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	background: rgba(0, 0, 0, 0.6);
+	z-index: 100050;
 	display: flex;
 	align-items: center;
-	gap: 12px;             /* Space between the two buttons */
+	justify-content: center;
 }
 
-/* Search filter input pushed to the right side of the flex container. */
-.geoprice-filter-wrap {
-	margin-left: auto;
+.geoprice-modal {
+	background: #fff;
+	border-radius: 8px;
+	box-shadow: 0 8px 40px rgba(0, 0, 0, 0.3);
+	width: 600px;
+	max-width: 90vw;
+	max-height: 80vh;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
 }
 
-/* Fixed width for the search input so it doesn't grow to fill available space. */
-#geoprice-filter {
-	width: 220px;
+
+/* ==========================================================================
+   Modal header
+   ========================================================================== */
+
+.geoprice-modal-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 16px 20px;
+	border-bottom: 1px solid #ddd;
+	flex-shrink: 0;
+}
+
+.geoprice-modal-header h3 {
+	margin: 0;
+	font-size: 1.2em;
+}
+
+.geoprice-modal-close {
+	background: none;
+	border: none;
+	font-size: 24px;
+	cursor: pointer;
+	color: #666;
+	padding: 0;
+	line-height: 1;
+	width: 30px;
+	height: 30px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 4px;
+	transition: background-color 0.15s, color 0.15s;
+}
+
+.geoprice-modal-close:hover {
+	background-color: #f0f0f1;
+	color: #d63638;
+}
+
+
+/* ==========================================================================
+   Modal controls (search, sort, group)
+   ========================================================================== */
+
+.geoprice-modal-controls {
+	padding: 12px 20px;
+	border-bottom: 1px solid #eee;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	flex-shrink: 0;
+	flex-wrap: wrap;
+}
+
+#geoprice-modal-search {
+	flex: 1;
+	min-width: 160px;
+}
+
+#geoprice-modal-sort {
+	width: auto;
+}
+
+.geoprice-modal-group-label {
+	white-space: nowrap;
+	font-size: 13px;
+	cursor: pointer;
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}
+
+
+/* ==========================================================================
+   Modal scrollable country list
+   ========================================================================== */
+
+.geoprice-modal-list {
+	overflow-y: auto;
+	flex: 1;
+	padding: 0;
+}
+
+/* Continent group header (when "Group by Continent" is checked) */
+.geoprice-modal-continent-header {
+	background: #f0f0f1;
+	padding: 8px 20px;
+	font-weight: 600;
+	font-size: 13px;
+	color: #1d2327;
+	border-bottom: 1px solid #ddd;
+	position: sticky;
+	top: 0;
+	z-index: 1;
+}
+
+
+/* ==========================================================================
+   Modal country row
+   ========================================================================== */
+
+.geoprice-modal-row {
+	display: flex;
+	align-items: center;
+	padding: 8px 20px;
+	border-bottom: 1px solid #f0f0f1;
+	transition: background-color 0.1s;
+}
+
+.geoprice-modal-row:hover {
+	background-color: #f6f7f7;
+}
+
+.geoprice-modal-row-name {
+	flex: 1;
+	font-size: 13px;
+}
+
+.geoprice-modal-row-code {
+	color: #888;
+	font-size: 12px;
+	margin-left: 6px;
+}
+
+.geoprice-modal-row-currency {
+	color: #888;
+	font-size: 12px;
+	margin-right: 12px;
+	min-width: 40px;
+	text-align: right;
+}
+
+.geoprice-modal-add-btn {
+	font-size: 12px !important;
+	padding: 2px 10px !important;
+	min-height: 26px !important;
+	line-height: 1.5 !important;
+}
+
+/* Visually mark countries already in the table as disabled. */
+.geoprice-modal-row.geoprice-already-added {
+	opacity: 0.45;
+	pointer-events: none;
+}
+
+.geoprice-modal-row.geoprice-already-added .geoprice-modal-add-btn {
+	visibility: hidden;
+}
+
+.geoprice-modal-added-label {
+	font-size: 11px;
+	color: #50575e;
+	font-style: italic;
+}
+
+
+/* ==========================================================================
+   Empty state (no search results in modal)
+   ========================================================================== */
+
+.geoprice-modal-empty {
+	padding: 30px 20px;
+	text-align: center;
+	color: #888;
+	font-size: 13px;
 }

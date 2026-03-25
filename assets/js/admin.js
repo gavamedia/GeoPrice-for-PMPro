@@ -5,209 +5,351 @@
  * @copyright 2024-2026 GAVAMEDIA Corporation (https://gavamedia.com)
  * @license   GPL-2.0-or-later
  *
- * This script powers the interactive features of the country pricing table
- * on the PMPro membership level edit page. It handles:
+ * This script powers the interactive country pricing UI on the PMPro membership
+ * level edit page. It handles:
  *
- *   1. SHOW/HIDE COUNTRIES:
- *      By default, only the top 20 countries (by population) are visible.
- *      The "Show All Countries" button reveals all ~195 countries.
- *      The "Show Top 20 Only" button hides them again (except rows with prices).
+ *   1. PRICING TABLE:
+ *      A compact table showing only active countries (US/CA/MX defaults + any
+ *      countries with saved prices). Each row has price inputs and a Remove button.
+ *      Row highlighting (green) is applied dynamically when prices are entered.
  *
- *   2. SEARCH/FILTER:
- *      A text input below the table filters countries by name in real-time.
- *      Typing "can" shows "Canada", typing "united" shows "United States",
- *      "United Kingdom", "United Arab Emirates". The filter searches ALL
- *      countries regardless of the show/hide state, so admins can find any
- *      country without expanding the full list.
+ *   2. ADD COUNTRY MODAL:
+ *      A popup dialog listing all ~195 countries. Features:
+ *        - Real-time search/filter by country name.
+ *        - Sort by name (A-Z) or population (largest first).
+ *        - Group by continent with sticky headers.
+ *        - Countries already in the table are greyed out with "Added" label.
+ *        - Clicking "+ Add" instantly inserts a new row into the pricing table.
  *
- *   3. ROW HIGHLIGHTING:
- *      Countries that have a price entered (in either field) get a green
- *      background via the 'geoprice-has-price' CSS class. This updates in
- *      real-time as the admin types, providing instant visual feedback about
- *      which countries have custom pricing configured.
+ *   3. REMOVE COUNTRY:
+ *      Each table row has a Remove button. Clicking it removes the row from
+ *      the DOM. When the form is saved, removed countries have no inputs in
+ *      the POST data, so their prices are effectively deleted.
+ *
+ * DATA SOURCE:
+ *   Country data (name, currency, continent, population) is passed from PHP
+ *   via wp_localize_script() as the global `geoPriceData.countries` object.
  *
  * DEPENDENCIES:
- *   - jQuery (bundled with WordPress, always available in admin).
- *
- * CSS CLASSES USED (defined in admin.css):
- *   - .geoprice-top-country: Rows for the top 20 countries (always visible by default).
- *   - .geoprice-extra-country: Rows for all other countries (hidden by default).
- *   - .geoprice-has-price: Added dynamically to rows with non-empty price inputs.
- *   - .geoprice-price-input: The price <input> fields in each row.
- *
- * DOM ELEMENTS:
- *   - #geoprice-country-table: The main table containing all country rows.
- *   - #geoprice-show-more: "Show All Countries" button.
- *   - #geoprice-hide-more: "Show Top 20 Only" button (initially hidden).
- *   - #geoprice-filter: Country name search input.
- *
- * HOW VISIBILITY WORKS:
- *   Rows are shown/hidden using jQuery's .show()/.hide() methods, which set
- *   display:none inline. The initial visibility is set by PHP (admin-level-pricing.php)
- *   using inline style="display:none" on extra-country rows that have no saved prices.
- *
- *   The 'expanded' boolean tracks whether the full list is showing. When the user
- *   clicks "Show Top 20 Only", extra-country rows are hidden UNLESS they have the
- *   'geoprice-has-price' class. This prevents hiding a row where the admin just
- *   entered a price — they'd lose sight of their own work.
+ *   - jQuery (bundled with WordPress admin).
+ *   - geoPriceData global (set by admin-level-pricing.php via wp_localize_script).
  */
 (function($) {
 	'use strict';
 
 	$(function() {
-		/* Cache DOM references for performance (avoid repeated lookups). */
-		var $table     = $('#geoprice-country-table');  // The country pricing table.
-		var $showMore  = $('#geoprice-show-more');      // "Show All Countries" button.
-		var $hideMore  = $('#geoprice-hide-more');      // "Show Top 20 Only" button.
-		var $filter    = $('#geoprice-filter');          // Country search input.
-		var expanded   = false;                        // Tracks full-list visibility state.
+		var countries = geoPriceData.countries || {};
+		var $table    = $('#geoprice-country-table');
+		var $tbody    = $('#geoprice-country-tbody');
+		var $addBtn   = $('#geoprice-add-country-btn');
+		var $overlay  = $('#geoprice-modal-overlay');
+		var $search   = $('#geoprice-modal-search');
+		var $sort     = $('#geoprice-modal-sort');
+		var $group    = $('#geoprice-modal-group');
+		var $list     = $('#geoprice-modal-list');
+
+		/* ================================================================
+		   PRICING TABLE — Row highlighting
+		   ================================================================ */
 
 		/**
-		 * Update the green highlight on rows that have prices entered.
-		 *
-		 * Iterates through every row in the table body. For each row, checks
-		 * whether ANY of its price input fields have a non-empty value. If so,
-		 * adds the 'geoprice-has-price' class (green background in CSS). If
-		 * all fields are empty, removes the class.
-		 *
-		 * WHEN THIS RUNS:
-		 *   - Once on page load (initial state from saved data).
-		 *   - On every keystroke in any price input field (real-time feedback).
+		 * Update green highlight on rows that have at least one price entered.
 		 */
 		function updateRowHighlights() {
-			$table.find('tbody tr').each(function() {
+			$tbody.find('tr').each(function() {
 				var $row = $(this);
 				var hasValue = false;
-
-				/*
-				 * Check each price input in this row. If any has a non-empty
-				 * value, mark the row as having a price. 'return false' breaks
-				 * out of the inner .each() loop early (optimization — no need
-				 * to check the second input if the first has a value).
-				 */
 				$row.find('.geoprice-price-input').each(function() {
 					if ($(this).val().trim() !== '') {
 						hasValue = true;
-						return false; // Break out of inner .each() loop.
+						return false;
 					}
 				});
-
-				/* Add or remove the highlight class based on whether a price exists. */
 				$row.toggleClass('geoprice-has-price', hasValue);
 			});
 		}
 
-		/**
-		 * "Show All Countries" button click handler.
-		 *
-		 * Reveals all hidden .geoprice-extra-country rows, swaps the button
-		 * labels (show → hide), clears any active filter, and updates the
-		 * expanded state flag.
-		 */
-		$showMore.on('click', function() {
-			expanded = true;
-			$table.find('.geoprice-extra-country').show(); // Reveal all hidden rows.
-			$showMore.hide();                              // Hide "Show All" button.
-			$hideMore.show();                              // Show "Show Top 20" button.
-			$filter.val('').trigger('input');               // Clear any active filter.
-		});
-
-		/**
-		 * "Show Top 20 Only" button click handler.
-		 *
-		 * Hides .geoprice-extra-country rows, but KEEPS rows that have prices
-		 * entered visible. This prevents hiding the admin's own configured prices
-		 * when they collapse the list.
-		 */
-		$hideMore.on('click', function() {
-			expanded = false;
-			$table.find('.geoprice-extra-country').each(function() {
-				var $row = $(this);
-				/*
-				 * Only hide rows that DON'T have a price set.
-				 * Rows with prices remain visible so the admin can still see
-				 * all countries they've configured, even in the collapsed view.
-				 */
-				if (!$row.hasClass('geoprice-has-price')) {
-					$row.hide();
-				}
-			});
-			$hideMore.hide();     // Hide "Show Top 20" button.
-			$showMore.show();     // Show "Show All" button.
-			$filter.val('');      // Clear the filter input.
-		});
-
-		/**
-		 * Country search/filter input handler.
-		 *
-		 * Fires on every keystroke (input event). Performs case-insensitive
-		 * substring matching against the country name stored in each row's
-		 * data-country attribute (set by PHP, e.g., data-country="canada").
-		 *
-		 * BEHAVIOR:
-		 *   - Empty filter: reset to the current expand/collapse state.
-		 *   - Non-empty filter: search ALL rows (including hidden extras)
-		 *     and show only matches. This lets the admin find any country
-		 *     by name without needing to click "Show All Countries" first.
-		 */
-		$filter.on('input', function() {
-			var query = $(this).val().toLowerCase().trim();
-
-			if (query === '') {
-				/*
-				 * Filter cleared — restore the current expand/collapse state.
-				 * If expanded, show everything. If collapsed, show top 20
-				 * plus any extra-country rows that have prices.
-				 */
-				if (expanded) {
-					$table.find('tbody tr').show();
-				} else {
-					$table.find('.geoprice-top-country').show();
-					$table.find('.geoprice-extra-country').each(function() {
-						var $row = $(this);
-						if (!$row.hasClass('geoprice-has-price')) {
-							$row.hide();
-						}
-					});
-				}
-				return;
-			}
-
-			/*
-			 * Active filter: iterate ALL rows and show/hide based on match.
-			 * The data-country attribute contains the lowercase country name
-			 * (e.g., "united states", "brazil", "germany"). We use indexOf
-			 * for substring matching: typing "ger" matches "germany",
-			 * "nig" matches both "niger" and "nigeria".
-			 */
-			$table.find('tbody tr').each(function() {
-				var $row = $(this);
-				var countryName = $row.data('country') || '';
-				if (countryName.indexOf(query) !== -1) {
-					$row.show();
-				} else {
-					$row.hide();
-				}
-			});
-		});
-
-		/**
-		 * Price input change handler (delegated event).
-		 *
-		 * When the admin types in any price input field, update the row
-		 * highlighting for all rows. Uses event delegation (bound to the table,
-		 * listening for input events on .geoprice-price-input children) for
-		 * efficiency — one handler instead of ~390 individual handlers.
-		 */
+		/* Delegated input handler for real-time highlight updates. */
 		$table.on('input', '.geoprice-price-input', function() {
 			updateRowHighlights();
 		});
 
-		/*
-		 * Initial highlight pass on page load.
-		 * If the level already has saved prices, those rows need to be
-		 * highlighted green immediately (not just when the admin types).
-		 */
+		/* Initial highlight pass on page load. */
 		updateRowHighlights();
+
+
+		/* ================================================================
+		   PRICING TABLE — Remove country
+		   ================================================================ */
+
+		/**
+		 * Remove a country row when the Remove button is clicked.
+		 * Uses event delegation since rows can be added dynamically.
+		 */
+		$tbody.on('click', '.geoprice-remove-btn', function(e) {
+			e.preventDefault();
+			$(this).closest('tr').fadeOut(200, function() {
+				$(this).remove();
+				/* If the modal is open, refresh it to un-grey the removed country. */
+				if ($overlay.is(':visible')) {
+					renderModalList();
+				}
+			});
+		});
+
+
+		/* ================================================================
+		   PRICING TABLE — Add country row
+		   ================================================================ */
+
+		/**
+		 * Build and insert a new table row for a given country code.
+		 * Called when the admin clicks "+ Add" in the modal.
+		 *
+		 * @param {string} code ISO 3166-1 alpha-2 country code.
+		 */
+		function addCountryRow(code) {
+			var c = countries[code];
+			if (!c) return;
+
+			/* Don't add duplicates. */
+			if ($tbody.find('tr[data-code="' + code + '"]').length > 0) return;
+
+			var html = '<tr data-code="' + escAttr(code) + '">' +
+				'<td class="geoprice-col-country">' +
+					'<strong>' + escHtml(c.name) + '</strong> ' +
+					'<span class="geoprice-country-code">(' + escHtml(code) + ')</span>' +
+				'</td>' +
+				'<td class="geoprice-col-currency">' + escHtml(c.currency) + '</td>' +
+				'<td class="geoprice-col-price">' +
+					'<span class="geoprice-dollar-prefix">$</span>' +
+					'<input type="text" name="geoprice_prices[' + escAttr(code) + '][initial_payment]" ' +
+						'value="" placeholder="default" ' +
+						'class="small-text geoprice-price-input" ' +
+						'pattern="[0-9]*\\.?[0-9]*" inputmode="decimal" />' +
+				'</td>' +
+				'<td class="geoprice-col-price">' +
+					'<span class="geoprice-dollar-prefix">$</span>' +
+					'<input type="text" name="geoprice_prices[' + escAttr(code) + '][billing_amount]" ' +
+						'value="" placeholder="default" ' +
+						'class="small-text geoprice-price-input" ' +
+						'pattern="[0-9]*\\.?[0-9]*" inputmode="decimal" />' +
+				'</td>' +
+				'<td class="geoprice-col-actions">' +
+					'<button type="button" class="button button-link-delete geoprice-remove-btn" title="Remove">' +
+						'<span class="dashicons dashicons-no-alt"></span>' +
+					'</button>' +
+				'</td>' +
+			'</tr>';
+
+			var $newRow = $(html).hide();
+			$tbody.append($newRow);
+			$newRow.fadeIn(200);
+
+			/* Refresh modal to grey out the newly added country. */
+			if ($overlay.is(':visible')) {
+				renderModalList();
+			}
+		}
+
+
+		/* ================================================================
+		   MODAL — Open / Close
+		   ================================================================ */
+
+		$addBtn.on('click', function(e) {
+			e.preventDefault();
+			$search.val('');
+			renderModalList();
+			$overlay.fadeIn(150);
+			$search.focus();
+		});
+
+		/* Close on X button click. */
+		$overlay.on('click', '.geoprice-modal-close', function(e) {
+			e.preventDefault();
+			$overlay.fadeOut(150);
+		});
+
+		/* Close on overlay background click (not the modal itself). */
+		$overlay.on('click', function(e) {
+			if ($(e.target).is('.geoprice-modal-overlay')) {
+				$overlay.fadeOut(150);
+			}
+		});
+
+		/* Close on Escape key. */
+		$(document).on('keydown', function(e) {
+			if (e.key === 'Escape' && $overlay.is(':visible')) {
+				$overlay.fadeOut(150);
+			}
+		});
+
+
+		/* ================================================================
+		   MODAL — Controls (search, sort, group)
+		   ================================================================ */
+
+		$search.on('input', function() {
+			renderModalList();
+		});
+
+		$sort.on('change', function() {
+			renderModalList();
+		});
+
+		$group.on('change', function() {
+			renderModalList();
+		});
+
+
+		/* ================================================================
+		   MODAL — Add button click (delegated)
+		   ================================================================ */
+
+		$list.on('click', '.geoprice-modal-add-btn', function(e) {
+			e.preventDefault();
+			var code = $(this).data('code');
+			addCountryRow(code);
+		});
+
+
+		/* ================================================================
+		   MODAL — Render the country list
+		   ================================================================
+		   This is the core rendering function. It:
+		     1. Reads current search query, sort order, and group toggle.
+		     2. Builds an array of country entries from geoPriceData.
+		     3. Filters by search query.
+		     4. Sorts by selected order.
+		     5. Optionally groups by continent with sticky headers.
+		     6. Marks countries already in the pricing table as "Added".
+		     7. Outputs the HTML into the modal list container.
+		*/
+		function renderModalList() {
+			var query     = ($search.val() || '').toLowerCase().trim();
+			var sortBy    = $sort.val();
+			var groupBy   = $group.is(':checked');
+
+			/* Build flat array of country objects. */
+			var entries = [];
+			$.each(countries, function(code, data) {
+				entries.push({
+					code:       code,
+					name:       data.name,
+					currency:   data.currency,
+					continent:  data.continent,
+					population: data.population
+				});
+			});
+
+			/* Filter by search query. */
+			if (query) {
+				entries = entries.filter(function(e) {
+					return e.name.toLowerCase().indexOf(query) !== -1 ||
+					       e.code.toLowerCase().indexOf(query) !== -1;
+				});
+			}
+
+			/* Sort. */
+			if (sortBy === 'population') {
+				entries.sort(function(a, b) {
+					return b.population - a.population;
+				});
+			} else {
+				entries.sort(function(a, b) {
+					return a.name.localeCompare(b.name);
+				});
+			}
+
+			/* Get set of country codes already in the pricing table. */
+			var addedCodes = {};
+			$tbody.find('tr[data-code]').each(function() {
+				addedCodes[$(this).data('code')] = true;
+			});
+
+			/* Build HTML. */
+			var html = '';
+
+			if (entries.length === 0) {
+				html = '<div class="geoprice-modal-empty">No countries found.</div>';
+			} else if (groupBy) {
+				/* Group by continent. */
+				var continentOrder = ['North America', 'South America', 'Europe', 'Asia', 'Africa', 'Oceania'];
+				var grouped = {};
+				$.each(entries, function(_, e) {
+					if (!grouped[e.continent]) {
+						grouped[e.continent] = [];
+					}
+					grouped[e.continent].push(e);
+				});
+
+				$.each(continentOrder, function(_, continent) {
+					if (!grouped[continent] || grouped[continent].length === 0) return;
+					html += '<div class="geoprice-modal-continent-header">' + escHtml(continent) + '</div>';
+					$.each(grouped[continent], function(_, e) {
+						html += buildModalRow(e, addedCodes);
+					});
+				});
+			} else {
+				/* Flat list. */
+				$.each(entries, function(_, e) {
+					html += buildModalRow(e, addedCodes);
+				});
+			}
+
+			$list.html(html);
+
+			/* Scroll to top when re-rendering. */
+			$list.scrollTop(0);
+		}
+
+		/**
+		 * Build the HTML for a single modal row.
+		 *
+		 * @param {Object}  entry      Country object {code, name, currency, continent, population}.
+		 * @param {Object}  addedCodes Hash of country codes already in the pricing table.
+		 * @return {string} HTML string.
+		 */
+		function buildModalRow(entry, addedCodes) {
+			var isAdded = addedCodes[entry.code] || false;
+			var cls = 'geoprice-modal-row' + (isAdded ? ' geoprice-already-added' : '');
+
+			var html = '<div class="' + cls + '">' +
+				'<span class="geoprice-modal-row-name">' +
+					escHtml(entry.name) +
+					' <span class="geoprice-modal-row-code">' + escHtml(entry.code) + '</span>' +
+				'</span>' +
+				'<span class="geoprice-modal-row-currency">' + escHtml(entry.currency) + '</span>';
+
+			if (isAdded) {
+				html += '<span class="geoprice-modal-added-label">Added</span>';
+			} else {
+				html += '<button type="button" class="button button-secondary geoprice-modal-add-btn" data-code="' + escAttr(entry.code) + '">+ Add</button>';
+			}
+
+			html += '</div>';
+			return html;
+		}
+
+
+		/* ================================================================
+		   UTILITY — HTML escaping helpers
+		   ================================================================ */
+
+		function escHtml(str) {
+			var div = document.createElement('div');
+			div.appendChild(document.createTextNode(str));
+			return div.innerHTML;
+		}
+
+		function escAttr(str) {
+			return str.replace(/&/g, '&amp;')
+			          .replace(/"/g, '&quot;')
+			          .replace(/'/g, '&#39;')
+			          .replace(/</g, '&lt;')
+			          .replace(/>/g, '&gt;');
+		}
+
 	});
 })(jQuery);
