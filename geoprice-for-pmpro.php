@@ -3,7 +3,7 @@
  * Plugin Name: GeoPrice for PMPro
  * Plugin URI:  https://gavamedia.com/plugins/geoprice-for-pmpro
  * Description: Variable geographic pricing for Paid Memberships Pro. Set country-specific membership prices in USD and display converted local currency amounts to visitors.
- * Version:     1.1.0
+ * Version:     1.2.0
  * Author:      GAVAMEDIA Corporation
  * Author URI:  https://gavamedia.com
  * License:     GPL-2.0-or-later
@@ -101,6 +101,11 @@
  *   includes/currency.php .............. Exchange rate fetching from external APIs,
  *                                          caching in wp_options, conversion math,
  *                                          and price formatting.
+ *   includes/ppp.php .................. Purchasing Power Parity data from the
+ *                                          World Bank Open Data API. Fetches GDP
+ *                                          per capita (PPP), computes country
+ *                                          multipliers relative to the US, and
+ *                                          caches results for pricing suggestions.
  *   includes/admin-settings.php ........ Global plugin settings page (registered
  *                                          under PMPro's admin menu). Controls for
  *                                          enable/disable, geolocation provider,
@@ -173,7 +178,7 @@ defined( 'ABSPATH' ) || exit;
  *                           Used by the plugin_action_links filter to add a
  *                           "Settings" link on the Plugins page.
  */
-define( 'GEOPRICE_PMPRO_VERSION', '1.1.4' );
+define( 'GEOPRICE_PMPRO_VERSION', '1.2.0' );
 define( 'GEOPRICE_PMPRO_DIR', plugin_dir_path( __FILE__ ) );
 define( 'GEOPRICE_PMPRO_URL', plugin_dir_url( __FILE__ ) );
 define( 'GEOPRICE_PMPRO_BASENAME', plugin_basename( __FILE__ ) );
@@ -220,6 +225,20 @@ function geoprice_pmpro_init() {
 
 	/* Service layer: exchange rate fetching, caching, and conversion. */
 	require_once GEOPRICE_PMPRO_DIR . 'includes/currency.php';
+
+	/* Service layer: Purchasing Power Parity data from World Bank API. */
+	require_once GEOPRICE_PMPRO_DIR . 'includes/ppp.php';
+
+	/*
+	 * Ensure the PPP cron job is scheduled. This handles the case where the
+	 * plugin is updated (adding PPP support) without being deactivated and
+	 * reactivated — the activation hook won't re-fire, so the cron event
+	 * wouldn't be registered. wp_next_scheduled() is a lightweight check
+	 * against the cached cron array in wp_options.
+	 */
+	if ( ! wp_next_scheduled( 'geoprice_pmpro_refresh_ppp' ) ) {
+		wp_schedule_event( time(), 'daily', 'geoprice_pmpro_refresh_ppp' );
+	}
 
 	/* Admin: global plugin settings page under PMPro menu. */
 	require_once GEOPRICE_PMPRO_DIR . 'includes/admin-settings.php';
@@ -277,6 +296,9 @@ function geoprice_pmpro_activate() {
 	if ( ! wp_next_scheduled( 'geoprice_pmpro_refresh_rates' ) ) {
 		wp_schedule_event( time(), 'daily', 'geoprice_pmpro_refresh_rates' );
 	}
+	if ( ! wp_next_scheduled( 'geoprice_pmpro_refresh_ppp' ) ) {
+		wp_schedule_event( time(), 'daily', 'geoprice_pmpro_refresh_ppp' );
+	}
 }
 register_activation_hook( __FILE__, 'geoprice_pmpro_activate' );
 
@@ -300,5 +322,6 @@ register_activation_hook( __FILE__, 'geoprice_pmpro_activate' );
  */
 function geoprice_pmpro_deactivate() {
 	wp_clear_scheduled_hook( 'geoprice_pmpro_refresh_rates' );
+	wp_clear_scheduled_hook( 'geoprice_pmpro_refresh_ppp' );
 }
 register_deactivation_hook( __FILE__, 'geoprice_pmpro_deactivate' );

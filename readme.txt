@@ -4,7 +4,7 @@ Tags: pmpro, paid memberships pro, geographic pricing, geolocation, currency con
 Requires at least: 5.8
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.1.3
+Stable tag: 1.2.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -25,6 +25,7 @@ All prices are configured in USD, and visitors see an approximate conversion to 
 * **Two-tier pricing model** — IP geolocation is used for display only. At checkout, the billing country from the checkout form determines the actual price charged.
 * **Daily exchange rate refresh** — Rates are fetched automatically via WordPress cron and cached for performance.
 * **Modern country picker** — Add countries to the pricing table via a searchable popup with flag emojis, sort by population or name, and group by continent.
+* **PPP-based pricing suggestions** — Purchasing Power Parity data from the World Bank helps you set fair, locally-adjusted prices. One-click "Apply Suggested" fills in prices based on each country's purchasing power relative to the US.
 * **Admin testing tools** — Append `?geoprice_country=CA` to any URL to preview pricing as a visitor from that country.
 * **Proxy/CDN support** — Configurable IP detection for sites behind Cloudflare, Nginx, or load balancers.
 
@@ -58,6 +59,12 @@ The visitor's IP address is sent to one of these services to determine their cou
 
 Exchange rate requests do not include any user data. Rates are fetched once daily via WordPress cron and cached in the database.
 
+**Purchasing Power Parity (PPP) Data:**
+
+* [World Bank Open Data](https://data.worldbank.org/) — License: [Creative Commons Attribution 4.0 (CC BY 4.0)](https://creativecommons.org/licenses/by/4.0/)
+
+GDP per capita (PPP) data is fetched from the World Bank API to power pricing suggestions. No user data is sent. Data is refreshed automatically every 30 days and cached in the database.
+
 == Installation ==
 
 1. Upload the `geoprice-for-pmpro` folder to `/wp-content/plugins/`.
@@ -88,6 +95,10 @@ The plugin falls back to a configurable default country (US by default). You can
 
 Go to **Memberships > GeoPrice** and change the **IP Detection Method** to match your infrastructure (Cloudflare, X-Forwarded-For, or X-Real-IP). The default (REMOTE_ADDR) works for sites with a direct connection.
 
+= What is the PPP column? =
+
+PPP (Purchasing Power Parity) measures each country's purchasing power relative to the US, using GDP per capita data from the World Bank. The "Apply Suggested" button calculates a fair price by multiplying your base price by the PPP multiplier. A square root curve moderates extreme differences so prices aren't unrealistically low for developing nations.
+
 = How often are exchange rates updated? =
 
 Rates are refreshed once daily via WordPress cron. You can also click **Refresh Rates Now** on the settings page for an immediate update.
@@ -98,7 +109,7 @@ GeoPrice's pricing layer works through PMPro's `pmpro_checkout_level` filter, wh
 
 = What data is cleaned up when I delete the plugin? =
 
-All plugin settings, cached exchange rates, geolocation transients, per-level pricing data, active country lists, and scheduled cron events are removed from the database when you delete the plugin through the WordPress admin.
+All plugin settings, cached exchange rates, PPP data, geolocation transients, per-level pricing data, active country lists, and scheduled cron events are removed from the database when you delete the plugin through the WordPress admin.
 
 == Screenshots ==
 
@@ -108,6 +119,14 @@ All plugin settings, cached exchange rates, geolocation transients, per-level pr
 4. Frontend display showing converted local currency prices.
 
 == Changelog ==
+
+= 1.2.0 =
+* Purchasing Power Parity (PPP) pricing suggestions powered by World Bank data.
+* "Apply Suggested" button per country and "Apply Suggested Pricing to All" for one-click fair pricing.
+* "Learn more" popup explaining PPP methodology, dampening curve, and data source.
+* PPP data auto-refreshes every 30 days via WordPress cron with manual refresh option.
+* Sortable pricing table columns (Country, Initial Payment, Renewal Amount) with localStorage persistence.
+* PPP Data Status section on the GeoPrice settings page.
 
 = 1.1.3 =
 * New country picker modal with flag emojis, search, population sort, and continent grouping.
@@ -127,6 +146,9 @@ All plugin settings, cached exchange rates, geolocation transients, per-level pr
 * Full data cleanup on plugin deletion.
 
 == Upgrade Notice ==
+
+= 1.2.0 =
+PPP-based pricing suggestions from World Bank data. Sortable table columns. One-click "Apply Suggested Pricing to All" for fair country-adjusted pricing.
 
 = 1.1.3 =
 New country picker modal with search and continent grouping. Geographic Pricing section moved below Billing Details. Added countries now persist even without prices.

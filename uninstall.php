@@ -52,6 +52,9 @@ $options_to_delete = array(
 	'geoprice_exchange_rates',
 	'geoprice_rates_updated',
 	'geoprice_trusted_ip_header',
+	'geoprice_ppp_ratios',
+	'geoprice_ppp_updated',
+	'geoprice_ppp_data_year',
 );
 
 foreach ( $options_to_delete as $option ) {
@@ -98,3 +101,4 @@ if ( $table_exists ) {
  *    we clean it up here too.
  */
 wp_clear_scheduled_hook( 'geoprice_pmpro_refresh_rates' );
+wp_clear_scheduled_hook( 'geoprice_pmpro_refresh_ppp' );

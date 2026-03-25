@@ -128,9 +128,35 @@ function geoprice_admin_enqueue_scripts( $hook ) {
 			'population' => $data['population'],
 		);
 	}
-	wp_localize_script( 'geoprice-admin', 'geoPriceData', array(
+
+	/*
+	 * If PPP data hasn't been fetched yet, trigger an initial fetch now.
+	 * This only happens once (on the first admin page load after activation).
+	 * The World Bank API call takes a few seconds but ensures the PPP column
+	 * is available immediately rather than waiting for the daily cron.
+	 */
+	$ppp_multipliers = geoprice_get_all_ppp_multipliers();
+	if ( empty( $ppp_multipliers ) ) {
+		geoprice_fetch_ppp_data();
+		$ppp_multipliers = geoprice_get_all_ppp_multipliers();
+	}
+
+	$localized_data = array(
 		'countries' => $js_countries,
-	) );
+	);
+
+	if ( ! empty( $ppp_multipliers ) ) {
+		$localized_data['pppMultipliers'] = $ppp_multipliers;
+
+		$ppp_data_year = (int) get_option( 'geoprice_ppp_data_year', 0 );
+		$ppp_updated   = (int) get_option( 'geoprice_ppp_updated', 0 );
+		if ( $ppp_updated ) {
+			$localized_data['pppUpdated']  = wp_date( get_option( 'date_format' ), $ppp_updated );
+			$localized_data['pppDataYear'] = $ppp_data_year;
+		}
+	}
+
+	wp_localize_script( 'geoprice-admin', 'geoPriceData', $localized_data );
 }
 add_action( 'admin_enqueue_scripts', 'geoprice_admin_enqueue_scripts' );
 
@@ -156,6 +182,8 @@ function geoprice_level_pricing_fields( $level ) {
 	$default_codes    = geoprice_get_default_countries();
 	$saved_prices     = array();
 	$saved_active     = array();
+	$ppp_multipliers  = geoprice_get_all_ppp_multipliers();
+	$has_ppp          = ! empty( $ppp_multipliers );
 
 	/*
 	 * Load existing data from level meta.
@@ -210,13 +238,31 @@ function geoprice_level_pricing_fields( $level ) {
 				<?php esc_html_e( 'Set custom USD prices per country. Leave blank to use the default prices, set in the "Billing Details" area above. Visitors will see amounts converted to their local currency.', 'geoprice-for-pmpro' ); ?>
 			</p>
 
+			<?php if ( $has_ppp ) : ?>
+			<p class="geoprice-apply-all-wrap">
+				<button type="button" class="button button-secondary" id="geoprice-apply-all-btn">
+					<span class="dashicons dashicons-update" style="vertical-align: middle; margin-top: -2px;"></span>
+					<?php esc_html_e( 'Apply Suggested Pricing to All', 'geoprice-for-pmpro' ); ?>
+				</button>
+			</p>
+			<?php endif; ?>
+
 			<table class="geoprice-country-table widefat" id="geoprice-country-table">
 				<thead>
 					<tr>
 						<th class="geoprice-col-country geoprice-sortable" data-sort="country"><?php esc_html_e( 'Country', 'geoprice-for-pmpro' ); ?> <span class="geoprice-sort-arrow"></span></th>
 						<th class="geoprice-col-currency"><?php esc_html_e( 'Local Currency', 'geoprice-for-pmpro' ); ?></th>
+						<?php if ( $has_ppp ) : ?>
+						<th class="geoprice-col-ppp">
+							<?php esc_html_e( 'PPP', 'geoprice-for-pmpro' ); ?>
+							<a href="#" id="geoprice-ppp-learn-more" class="geoprice-ppp-learn-more"><?php esc_html_e( 'Learn more', 'geoprice-for-pmpro' ); ?></a>
+						</th>
+						<?php endif; ?>
 						<th class="geoprice-col-price geoprice-sortable" data-sort="initial"><?php esc_html_e( 'Initial Payment (USD)', 'geoprice-for-pmpro' ); ?> <span class="geoprice-sort-arrow"></span></th>
 						<th class="geoprice-col-price geoprice-sortable" data-sort="renewal"><?php esc_html_e( 'Renewal Amount (USD)', 'geoprice-for-pmpro' ); ?> <span class="geoprice-sort-arrow"></span></th>
+						<?php if ( $has_ppp ) : ?>
+						<th class="geoprice-col-apply">&nbsp;</th>
+						<?php endif; ?>
 						<th class="geoprice-col-actions">&nbsp;</th>
 					</tr>
 				</thead>
@@ -228,7 +274,7 @@ function geoprice_level_pricing_fields( $level ) {
 					 */
 					foreach ( $active_codes as $code ) {
 						if ( isset( $countries[ $code ] ) ) {
-							geoprice_render_country_row( $code, $countries[ $code ], $saved_prices );
+							geoprice_render_country_row( $code, $countries[ $code ], $saved_prices, $ppp_multipliers );
 						}
 					}
 					?>
@@ -279,6 +325,73 @@ function geoprice_level_pricing_fields( $level ) {
 				</div>
 			</div>
 
+		<?php if ( $has_ppp ) : ?>
+			<!--
+				PPP "Learn More" info popup.
+				Provides a detailed explanation of what the PPP index is,
+				how it's calculated, and where the data comes from.
+			-->
+			<div id="geoprice-ppp-info-overlay" class="geoprice-ppp-info-overlay" style="display:none;">
+				<div class="geoprice-ppp-info-modal">
+					<div class="geoprice-ppp-info-header">
+						<h3><?php esc_html_e( 'Purchasing Power Parity (PPP) Index', 'geoprice-for-pmpro' ); ?></h3>
+						<button type="button" class="geoprice-ppp-info-close" aria-label="<?php esc_attr_e( 'Close', 'geoprice-for-pmpro' ); ?>">&times;</button>
+					</div>
+					<div class="geoprice-ppp-info-body">
+						<p>
+							<?php esc_html_e( 'The PPP Index helps you set fair, locally-adjusted prices for each country. It reflects how much purchasing power people in each country have relative to the United States.', 'geoprice-for-pmpro' ); ?>
+						</p>
+
+						<h4><?php esc_html_e( 'How it works', 'geoprice-for-pmpro' ); ?></h4>
+						<p>
+							<?php esc_html_e( 'We use GDP per capita (PPP-adjusted) data published by the World Bank. Each country\'s value is compared to the US baseline, then a square root curve is applied to moderate extreme differences.', 'geoprice-for-pmpro' ); ?>
+						</p>
+						<p>
+							<?php esc_html_e( 'Without dampening, the cheapest countries would show multipliers under 0.10x, which is often too aggressive for digital products. The square root curve provides a balanced middle ground.', 'geoprice-for-pmpro' ); ?>
+						</p>
+
+						<h4><?php esc_html_e( 'Example', 'geoprice-for-pmpro' ); ?></h4>
+						<p>
+							<?php esc_html_e( 'A country with a PPP of 0.50x means customers there have roughly half the purchasing power of US customers. Setting your price at 50% of the US price makes it comparably affordable.', 'geoprice-for-pmpro' ); ?>
+						</p>
+
+						<h4><?php esc_html_e( '"Apply Suggested" Button', 'geoprice-for-pmpro' ); ?></h4>
+						<p>
+							<?php esc_html_e( 'Multiplies your base price (set in "Billing Details" above) by the PPP multiplier. Both Initial Payment and Renewal Amount are set to the calculated value. You can adjust the result before saving.', 'geoprice-for-pmpro' ); ?>
+						</p>
+
+						<h4><?php esc_html_e( 'Data source', 'geoprice-for-pmpro' ); ?></h4>
+						<p>
+							<?php
+							printf(
+								/* translators: %s: link to World Bank */
+								esc_html__( 'World Bank Open Data (%s) — GDP per capita, PPP (current international $). Licensed under Creative Commons Attribution 4.0 (CC BY 4.0). Data is refreshed automatically every 30 days; the World Bank updates PPP figures annually.', 'geoprice-for-pmpro' ),
+								'<a href="https://data.worldbank.org" target="_blank" rel="noopener">data.worldbank.org</a>'
+							);
+							?>
+						</p>
+
+						<?php
+						$ppp_updated   = (int) get_option( 'geoprice_ppp_updated', 0 );
+						$ppp_data_year = (int) get_option( 'geoprice_ppp_data_year', 0 );
+						if ( $ppp_updated ) :
+						?>
+						<p class="geoprice-ppp-info-meta">
+							<?php
+							printf(
+								/* translators: 1: date of last refresh, 2: data year */
+								esc_html__( 'Last refreshed: %1$s (using %2$d data)', 'geoprice-for-pmpro' ),
+								esc_html( wp_date( get_option( 'date_format' ), $ppp_updated ) ),
+								$ppp_data_year
+							);
+							?>
+						</p>
+						<?php endif; ?>
+					</div>
+				</div>
+			</div>
+			<?php endif; ?>
+
 		</div> <!-- end pmpro_section_inside (Geographic Pricing) -->
 	</div> <!-- end pmpro_section (Geographic Pricing) -->
 
@@ -300,21 +413,26 @@ add_action( 'pmpro_membership_level_after_trial_settings', 'geoprice_level_prici
  * Each row contains:
  *   - Country name and ISO code (display only).
  *   - Local currency code (display only, informational for the admin).
+ *   - PPP multiplier (if data is available; display only).
  *   - Initial Payment input field (USD amount, or empty for "use default").
  *   - Renewal Amount input field (USD amount, or empty for "use default").
+ *   - "Apply Suggested" button (if PPP data is available; visibility managed by JS).
  *   - Remove button to remove the country from the table.
  *
  * The row's data-code attribute is used by admin.js to identify which country
  * this row represents (for duplicate prevention and removal).
  *
- * @param string $code         ISO 3166-1 alpha-2 country code (e.g., 'CA', 'MX').
- * @param array  $data         Country data array with 'name', 'currency', etc.
- * @param array  $saved_prices All saved prices for this level.
+ * @param string $code             ISO 3166-1 alpha-2 country code (e.g., 'CA', 'MX').
+ * @param array  $data             Country data array with 'name', 'currency', etc.
+ * @param array  $saved_prices     All saved prices for this level.
+ * @param array  $ppp_multipliers  Dampened PPP multipliers keyed by country code.
  * @return void
  */
-function geoprice_render_country_row( $code, $data, $saved_prices ) {
+function geoprice_render_country_row( $code, $data, $saved_prices, $ppp_multipliers = array() ) {
 	$initial = isset( $saved_prices[ $code ]['initial_payment'] ) ? $saved_prices[ $code ]['initial_payment'] : '';
 	$billing = isset( $saved_prices[ $code ]['billing_amount'] ) ? $saved_prices[ $code ]['billing_amount'] : '';
+	$has_ppp = ! empty( $ppp_multipliers );
+	$ppp     = isset( $ppp_multipliers[ $code ] ) ? $ppp_multipliers[ $code ] : null;
 	?>
 	<tr data-code="<?php echo esc_attr( $code ); ?>">
 		<!-- Hidden input tracks this country's presence in the table for saving. -->
@@ -326,6 +444,15 @@ function geoprice_render_country_row( $code, $data, $saved_prices ) {
 		<td class="geoprice-col-currency">
 			<?php echo esc_html( $data['currency'] ); ?>
 		</td>
+		<?php if ( $has_ppp ) : ?>
+		<td class="geoprice-col-ppp">
+			<?php if ( null !== $ppp ) : ?>
+				<span class="geoprice-ppp-value"><?php echo esc_html( number_format( $ppp, 2 ) ); ?>&times;</span>
+			<?php else : ?>
+				<span class="geoprice-ppp-na">&mdash;</span>
+			<?php endif; ?>
+		</td>
+		<?php endif; ?>
 		<td class="geoprice-col-price">
 			<span class="geoprice-dollar-prefix">$</span>
 			<input type="text"
@@ -346,6 +473,13 @@ function geoprice_render_country_row( $code, $data, $saved_prices ) {
 				pattern="[0-9]*\.?[0-9]*"
 				inputmode="decimal" />
 		</td>
+		<?php if ( $has_ppp ) : ?>
+		<td class="geoprice-col-apply">
+			<button type="button" class="geoprice-apply-btn" title="<?php esc_attr_e( 'Apply PPP-suggested price', 'geoprice-for-pmpro' ); ?>">
+				<?php esc_html_e( 'Apply Suggested', 'geoprice-for-pmpro' ); ?>
+			</button>
+		</td>
+		<?php endif; ?>
 		<td class="geoprice-col-actions">
 			<button type="button" class="button button-link-delete geoprice-remove-btn" title="<?php esc_attr_e( 'Remove', 'geoprice-for-pmpro' ); ?>">
 				<span class="dashicons dashicons-no-alt"></span>

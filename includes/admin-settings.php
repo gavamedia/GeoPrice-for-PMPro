@@ -576,6 +576,43 @@ function geoprice_settings_page() {
 				</tr>
 
 				<!--
+					PPP DATA STATUS
+					Shows the status of Purchasing Power Parity data from
+					the World Bank, and provides a manual refresh button.
+				-->
+				<tr>
+					<th scope="row"><?php esc_html_e( 'PPP Data Status', 'geoprice-for-pmpro' ); ?></th>
+					<td>
+						<?php
+						$ppp_updated   = (int) get_option( 'geoprice_ppp_updated', 0 );
+						$ppp_data_year = (int) get_option( 'geoprice_ppp_data_year', 0 );
+						?>
+						<?php if ( $ppp_updated ) : ?>
+							<p>
+								<?php
+								printf(
+									/* translators: 1: date of last refresh, 2: data year */
+									esc_html__( 'Last refreshed: %1$s (using %2$d data from the World Bank)', 'geoprice-for-pmpro' ),
+									esc_html( wp_date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $ppp_updated ) ),
+									$ppp_data_year
+								);
+								?>
+							</p>
+						<?php else : ?>
+							<p><?php esc_html_e( 'PPP data has not been fetched yet. Click the button below to fetch it now.', 'geoprice-for-pmpro' ); ?></p>
+						<?php endif; ?>
+						<p>
+							<a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin.php?page=geoprice-settings&geoprice_refresh_ppp=1' ), 'geoprice_refresh_ppp' ) ); ?>" class="button button-secondary">
+								<?php esc_html_e( 'Refresh PPP Data Now', 'geoprice-for-pmpro' ); ?>
+							</a>
+						</p>
+						<p class="description">
+							<?php esc_html_e( 'Purchasing Power Parity data from the World Bank is used to suggest country-adjusted pricing on the level edit page. Data is refreshed automatically every 30 days.', 'geoprice-for-pmpro' ); ?>
+						</p>
+					</td>
+				</tr>
+
+				<!--
 					ADMIN TESTING INSTRUCTIONS
 					Informational row explaining how to use the ?geoprice_country=XX
 					URL parameter to simulate pricing for different countries.
@@ -672,6 +709,45 @@ function geoprice_handle_refresh_rates() {
 	}
 }
 add_action( 'admin_init', 'geoprice_handle_refresh_rates' );
+
+/**
+ * Handle the "Refresh PPP Data Now" admin action.
+ *
+ * Works the same way as the exchange rates refresh: checks for a query
+ * parameter + nonce, then triggers a synchronous World Bank API fetch.
+ *
+ * @return void
+ */
+function geoprice_handle_refresh_ppp() {
+	if ( empty( $_GET['geoprice_refresh_ppp'] ) || empty( $_GET['_wpnonce'] ) ) {
+		return;
+	}
+
+	if ( ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_GET['_wpnonce'] ) ), 'geoprice_refresh_ppp' ) ) {
+		return;
+	}
+
+	if ( ! current_user_can( 'pmpro_membershiplevels' ) ) {
+		return;
+	}
+
+	$success = geoprice_fetch_ppp_data();
+
+	if ( $success ) {
+		add_action( 'admin_notices', function() {
+			echo '<div class="notice notice-success is-dismissible"><p>';
+			esc_html_e( 'PPP data refreshed successfully from the World Bank.', 'geoprice-for-pmpro' );
+			echo '</p></div>';
+		} );
+	} else {
+		add_action( 'admin_notices', function() {
+			echo '<div class="notice notice-error is-dismissible"><p>';
+			esc_html_e( 'Failed to refresh PPP data. The World Bank API may be temporarily unavailable.', 'geoprice-for-pmpro' );
+			echo '</p></div>';
+		} );
+	}
+}
+add_action( 'admin_init', 'geoprice_handle_refresh_ppp' );
 
 /**
  * Add a "Settings" link to the plugin's row on the Plugins page.

@@ -15,7 +15,14 @@
  *      Column headers (Country, Initial Payment, Renewal Amount) are sortable.
  *      Sort preference is persisted in localStorage across all membership levels.
  *
- *   2. ADD COUNTRY MODAL:
+ *   2. PPP (PURCHASING POWER PARITY):
+ *      When PPP data is available (fetched from the World Bank API), a PPP column
+ *      shows each country's purchasing power multiplier relative to the US.
+ *      "Apply Suggested" buttons let the admin auto-fill prices based on the
+ *      base price × PPP multiplier. An "Apply Suggested Pricing to All" button
+ *      fills all countries at once. A "Learn More" popup explains the methodology.
+ *
+ *   3. ADD COUNTRY MODAL:
  *      A polished popup dialog listing all ~195 countries. Features:
  *        - Flag emojis for instant visual identification.
  *        - Two-line layout: country name on top, code + currency below.
@@ -25,7 +32,7 @@
  *        - Countries already in the table are dimmed with a green "Added" badge.
  *        - Clicking "+ Add" instantly inserts a new row into the pricing table.
  *
- *   3. REMOVE COUNTRY:
+ *   4. REMOVE COUNTRY:
  *      Each table row has a Remove button. Clicking it removes the row from
  *      the DOM immediately. On form save, that country has no inputs in POST.
  *
@@ -42,6 +49,7 @@
  * DATA SOURCE:
  *   Country data (name, currency, continent, population) is passed from PHP
  *   via wp_localize_script() as the global `geoPriceData.countries` object.
+ *   PPP multipliers are passed as `geoPriceData.pppMultipliers` (if available).
  *
  * DEPENDENCIES:
  *   - jQuery (bundled with WordPress admin).
@@ -51,7 +59,10 @@
 	'use strict';
 
 	$(function() {
-		var countries = geoPriceData.countries || {};
+		var countries      = geoPriceData.countries || {};
+		var pppMultipliers = geoPriceData.pppMultipliers || {};
+		var hasPPP         = Object.keys(pppMultipliers).length > 0;
+
 		var $table    = $('#geoprice-country-table');
 		var $tbody    = $('#geoprice-country-tbody');
 		var $addBtn   = $('#geoprice-add-country-btn');
@@ -69,6 +80,12 @@
 		 * position) from interfering with position:fixed on the overlay.
 		 */
 		$overlay.appendTo('body');
+
+		/* Also move the PPP info popup to <body>. */
+		var $pppOverlay = $('#geoprice-ppp-info-overlay');
+		if ($pppOverlay.length) {
+			$pppOverlay.appendTo('body');
+		}
 
 		/**
 		 * Show the "unsaved changes" reminder.
@@ -89,7 +106,7 @@
 		   Convert a 2-letter ISO country code to a flag emoji.
 		   Each letter A-Z maps to a Unicode Regional Indicator Symbol:
 		     'A' => U+1F1E6, 'B' => U+1F1E7, ... 'Z' => U+1F1FF
-		   Pairing two gives the flag: 'US' => 🇺🇸, 'CA' => 🇨🇦
+		   Pairing two gives the flag: 'US' => U+1F1FA U+1F1F8
 		*/
 		function codeToFlag(code) {
 			if (!code || code.length !== 2) return '';
@@ -119,6 +136,7 @@
 
 		$table.on('input', '.geoprice-price-input', function() {
 			updateRowHighlights();
+			updateApplyButtons();
 			showSaveReminder();
 		});
 
@@ -241,6 +259,196 @@
 
 
 		/* ================================================================
+		   PPP — Purchasing Power Parity suggestions
+		   ================================================================
+		   When PPP data is available, each table row shows a multiplier
+		   and an "Apply Suggested" button. The button fills both price
+		   fields with: base_price × ppp_multiplier.
+		*/
+
+		/**
+		 * Read the base prices from PMPro's Billing Details form fields.
+		 * These are the level's default Initial Payment and Billing Amount.
+		 */
+		function getBasePrices() {
+			return {
+				initial: parseFloat($('input[name="initial_payment"]').val()) || 0,
+				renewal: parseFloat($('input[name="billing_amount"]').val()) || 0
+			};
+		}
+
+		/**
+		 * Compute the PPP-suggested prices for a country.
+		 * Returns null if PPP data is unavailable or base prices are zero.
+		 */
+		function getSuggestedPrices(code) {
+			if (!hasPPP) return null;
+
+			var mult = pppMultipliers[code];
+			if (!mult || mult <= 0) return null;
+
+			var base = getBasePrices();
+			if (base.initial === 0 && base.renewal === 0) return null;
+
+			return {
+				initial: base.initial > 0 ? (base.initial * mult).toFixed(2) : '',
+				renewal: base.renewal > 0 ? (base.renewal * mult).toFixed(2) : ''
+			};
+		}
+
+		/**
+		 * Update visibility of all "Apply Suggested" buttons.
+		 *
+		 * A button is hidden when:
+		 *   - No PPP data exists for the country.
+		 *   - Base prices are both zero (nothing to suggest).
+		 *   - Both current prices already match the suggested values.
+		 *   - PPP multiplier is ~1.0 and fields are empty (default = suggested).
+		 */
+		function updateApplyButtons() {
+			if (!hasPPP) return;
+
+			$tbody.find('tr[data-code]').each(function() {
+				var $row = $(this);
+				var code = $row.data('code');
+				var $btn = $row.find('.geoprice-apply-btn');
+
+				if (!$btn.length) return;
+
+				var suggested = getSuggestedPrices(code);
+				if (!suggested) {
+					$btn.hide();
+					return;
+				}
+
+				var currentInitial = $row.find('.geoprice-price-input').eq(0).val().trim();
+				var currentRenewal = $row.find('.geoprice-price-input').eq(1).val().trim();
+
+				/*
+				 * If PPP is approximately 1.0 and fields are empty, the default
+				 * price is already the "suggested" price. Hide the button.
+				 */
+				var mult = pppMultipliers[code] || 0;
+				if (mult >= 0.98 && mult <= 1.02 && currentInitial === '' && currentRenewal === '') {
+					$btn.hide();
+					return;
+				}
+
+				/*
+				 * If both current values match the suggested values, hide the
+				 * button — the suggestion is already applied.
+				 */
+				var initialMatch = (suggested.initial === '' && currentInitial === '') ||
+					currentInitial === suggested.initial;
+				var renewalMatch = (suggested.renewal === '' && currentRenewal === '') ||
+					currentRenewal === suggested.renewal;
+
+				if (initialMatch && renewalMatch) {
+					$btn.hide();
+				} else {
+					$btn.show();
+				}
+			});
+		}
+
+		/* Per-row "Apply Suggested" button click. */
+		$tbody.on('click', '.geoprice-apply-btn', function(e) {
+			e.preventDefault();
+			var $row = $(this).closest('tr');
+			var code = $row.data('code');
+			var suggested = getSuggestedPrices(code);
+			if (!suggested) return;
+
+			if (suggested.initial !== '') {
+				$row.find('.geoprice-price-input').eq(0).val(suggested.initial);
+			}
+			if (suggested.renewal !== '') {
+				$row.find('.geoprice-price-input').eq(1).val(suggested.renewal);
+			}
+
+			updateRowHighlights();
+			updateApplyButtons();
+			showSaveReminder();
+		});
+
+		/* "Apply Suggested Pricing to All" button click. */
+		$('#geoprice-apply-all-btn').on('click', function(e) {
+			e.preventDefault();
+
+			/* Confirm if any existing prices would be overwritten. */
+			var hasExisting = false;
+			$tbody.find('.geoprice-price-input').each(function() {
+				if ($(this).val().trim() !== '') {
+					hasExisting = true;
+					return false;
+				}
+			});
+
+			if (hasExisting) {
+				if (!confirm('This will replace all existing prices with PPP-suggested values. Continue?')) {
+					return;
+				}
+			}
+
+			$tbody.find('tr[data-code]').each(function() {
+				var $row = $(this);
+				var code = $row.data('code');
+				var suggested = getSuggestedPrices(code);
+				if (!suggested) return;
+
+				if (suggested.initial !== '') {
+					$row.find('.geoprice-price-input').eq(0).val(suggested.initial);
+				}
+				if (suggested.renewal !== '') {
+					$row.find('.geoprice-price-input').eq(1).val(suggested.renewal);
+				}
+			});
+
+			updateRowHighlights();
+			updateApplyButtons();
+			showSaveReminder();
+		});
+
+		/*
+		 * Re-check Apply Suggested visibility when the admin changes the
+		 * base prices in PMPro's Billing Details section above.
+		 */
+		$('input[name="initial_payment"], input[name="billing_amount"]').on('input', function() {
+			updateApplyButtons();
+		});
+
+		/* Initial visibility check on page load. */
+		updateApplyButtons();
+
+
+		/* ================================================================
+		   PPP — "Learn More" info popup
+		   ================================================================ */
+
+		$('#geoprice-ppp-learn-more').on('click', function(e) {
+			e.preventDefault();
+			$pppOverlay.addClass('geoprice-ppp-info-visible');
+		});
+
+		$pppOverlay.on('click', '.geoprice-ppp-info-close', function(e) {
+			e.preventDefault();
+			$pppOverlay.removeClass('geoprice-ppp-info-visible');
+		});
+
+		$pppOverlay.on('click', function(e) {
+			if (e.target === $pppOverlay[0]) {
+				$pppOverlay.removeClass('geoprice-ppp-info-visible');
+			}
+		});
+
+		$(document).on('keydown', function(e) {
+			if (e.key === 'Escape' && $pppOverlay.hasClass('geoprice-ppp-info-visible')) {
+				$pppOverlay.removeClass('geoprice-ppp-info-visible');
+			}
+		});
+
+
+		/* ================================================================
 		   PRICING TABLE — Remove country
 		   ================================================================ */
 
@@ -305,6 +513,22 @@
 
 			if ($tbody.find('tr[data-code="' + code + '"]').length > 0) return;
 
+			var pppMult = pppMultipliers[code];
+			var pppCell = '';
+			var applyCell = '';
+
+			if (hasPPP) {
+				var pppDisplay = pppMult ? pppMult.toFixed(2) + '\u00D7' : '\u2014';
+				var pppClass = pppMult ? 'geoprice-ppp-value' : 'geoprice-ppp-na';
+				pppCell = '<td class="geoprice-col-ppp">' +
+					'<span class="' + pppClass + '">' + pppDisplay + '</span>' +
+				'</td>';
+
+				applyCell = '<td class="geoprice-col-apply">' +
+					'<button type="button" class="geoprice-apply-btn" title="Apply PPP-suggested price">Apply Suggested</button>' +
+				'</td>';
+			}
+
 			var html = '<tr data-code="' + escAttr(code) + '">' +
 				'<input type="hidden" name="geoprice_active_countries[]" value="' + escAttr(code) + '" />' +
 				'<td class="geoprice-col-country">' +
@@ -312,6 +536,7 @@
 					'<span class="geoprice-country-code">(' + escHtml(code) + ')</span>' +
 				'</td>' +
 				'<td class="geoprice-col-currency">' + escHtml(c.currency) + '</td>' +
+				pppCell +
 				'<td class="geoprice-col-price">' +
 					'<span class="geoprice-dollar-prefix">$</span>' +
 					'<input type="text" name="geoprice_prices[' + escAttr(code) + '][initial_payment]" ' +
@@ -326,6 +551,7 @@
 						'class="small-text geoprice-price-input" ' +
 						'pattern="[0-9]*\\.?[0-9]*" inputmode="decimal" />' +
 				'</td>' +
+				applyCell +
 				'<td class="geoprice-col-actions">' +
 					'<button type="button" class="button button-link-delete geoprice-remove-btn" title="Remove">' +
 						'<span class="dashicons dashicons-no-alt"></span>' +
@@ -337,6 +563,7 @@
 			$tbody.append($newRow);
 			applySort();
 			$newRow.fadeIn(200);
+			updateApplyButtons();
 		}
 
 
@@ -524,7 +751,7 @@
 		/**
 		 * Build the HTML for a single modal country row.
 		 *
-		 * Layout: [Flag] [Name / Code · Currency] [+ Add | ✓ Added]
+		 * Layout: [Flag] [Name / Code · Currency] [+ Add | checkmark Added]
 		 */
 		function buildModalRow(entry, addedCodes) {
 			var isAdded = addedCodes[entry.code] || false;

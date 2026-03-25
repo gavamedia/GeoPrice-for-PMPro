@@ -85,6 +85,107 @@
 
 
 /* ==========================================================================
+   PPP (Purchasing Power Parity) column
+   ========================================================================== */
+
+.geoprice-col-ppp {
+	min-width: 60px;
+	text-align: center;
+	white-space: nowrap;
+}
+
+.geoprice-col-ppp.geoprice-col-ppp {
+	/* Header specificity */
+	text-align: center;
+}
+
+.geoprice-ppp-value {
+	display: inline-block;
+	font-size: 13px;
+	font-weight: 500;
+	color: #2271b1;
+	font-variant-numeric: tabular-nums;
+}
+
+.geoprice-ppp-na {
+	color: #c3c4c7;
+	font-size: 14px;
+}
+
+/* "Learn more" link in the PPP column header */
+.geoprice-ppp-learn-more {
+	display: block;
+	font-size: 10px;
+	font-weight: 400;
+	color: #2271b1;
+	text-decoration: none;
+	opacity: 0.7;
+	transition: opacity 0.15s;
+}
+
+.geoprice-ppp-learn-more:hover {
+	opacity: 1;
+	text-decoration: underline;
+}
+
+
+/* ==========================================================================
+   "Apply Suggested" button (per-row)
+   ========================================================================== */
+
+.geoprice-col-apply {
+	min-width: 120px;
+	text-align: center;
+	white-space: nowrap;
+}
+
+button.geoprice-apply-btn {
+	display: inline-block;
+	font-size: 11px;
+	font-weight: 500;
+	padding: 4px 12px;
+	min-height: 0;
+	line-height: 1.4;
+	border-radius: 14px;
+	border: 1px solid #2271b1;
+	color: #2271b1;
+	background: transparent;
+	cursor: pointer;
+	transition: all 0.15s ease;
+	white-space: nowrap;
+	box-shadow: none;
+	text-decoration: none;
+}
+
+button.geoprice-apply-btn:hover {
+	background: #2271b1;
+	color: #fff;
+	box-shadow: 0 1px 4px rgba(34, 113, 177, 0.2);
+}
+
+button.geoprice-apply-btn:focus {
+	outline: none;
+	box-shadow: 0 0 0 2px rgba(34, 113, 177, 0.25);
+}
+
+
+/* ==========================================================================
+   "Apply Suggested Pricing to All" button (above table)
+   ========================================================================== */
+
+.geoprice-apply-all-wrap {
+	margin-bottom: 8px;
+}
+
+.geoprice-apply-all-wrap .dashicons {
+	font-size: 16px;
+	width: 16px;
+	height: 16px;
+	margin-right: 2px;
+}
+
+
+/* ==========================================================================
    Sortable column headers
    ========================================================================== */
 
@@ -120,14 +221,14 @@
 	border-bottom: none;
 }
 
-/* Active sort — ascending (▲) */
+/* Active sort — ascending */
 .geoprice-sort-arrow.geoprice-sort-asc {
 	opacity: 1 !important;
 	border-bottom: 5px solid #2271b1;
 	border-top: none;
 }
 
-/* Active sort — descending (▼) */
+/* Active sort — descending */
 .geoprice-sort-arrow.geoprice-sort-desc {
 	opacity: 1 !important;
 	border-top: 5px solid #2271b1;
@@ -201,7 +302,138 @@
 
 
 /* ==========================================================================
-   MODAL — Overlay
+   PPP — "Learn More" info popup
+   --------------------------------------------------------------------------
+   A lightweight informational modal explaining PPP methodology and data source.
+   Uses the same overlay pattern as the country picker modal (CSS class toggle,
+   moved to <body> by JS).
+   ========================================================================== */
+
+#geoprice-ppp-info-overlay {
+	display: none !important;
+	position: fixed !important;
+	top: 0 !important;
+	left: 0 !important;
+	width: 100vw !important;
+	height: 100vh !important;
+	z-index: 100070 !important;
+	background: rgba(0, 0, 0, 0.55) !important;
+	-webkit-backdrop-filter: blur(2px);
+	backdrop-filter: blur(2px);
+	align-items: center !important;
+	justify-content: center !important;
+	margin: 0 !important;
+	padding: 0 !important;
+	border: none !important;
+	box-sizing: border-box !important;
+}
+
+#geoprice-ppp-info-overlay.geoprice-ppp-info-visible {
+	display: flex !important;
+}
+
+.geoprice-ppp-info-modal {
+	background: #fff !important;
+	border-radius: 14px !important;
+	box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25) !important;
+	width: 520px !important;
+	max-width: 92vw !important;
+	max-height: 80vh !important;
+	display: flex !important;
+	flex-direction: column !important;
+	overflow: hidden !important;
+	animation: geoPriceModalSlideIn 0.25s ease-out;
+	margin: 0 !important;
+	padding: 0 !important;
+}
+
+.geoprice-ppp-info-header {
+	display: flex !important;
+	justify-content: space-between !important;
+	align-items: center !important;
+	padding: 20px 24px !important;
+	background: linear-gradient(135deg, #0a4b78 0%, #135e96 100%) !important;
+	flex-shrink: 0 !important;
+	border-bottom: none !important;
+	margin: 0 !important;
+}
+
+.geoprice-ppp-info-header h3 {
+	margin: 0 !important;
+	padding: 0 !important;
+	font-size: 15px !important;
+	font-weight: 600 !important;
+	color: #fff !important;
+	letter-spacing: 0.01em !important;
+	line-height: 1.3 !important;
+	border: none !important;
+	background: none !important;
+}
+
+button.geoprice-ppp-info-close {
+	background: rgba(255, 255, 255, 0.1) !important;
+	border: none !important;
+	font-size: 20px !important;
+	cursor: pointer !important;
+	color: rgba(255, 255, 255, 0.7) !important;
+	padding: 0 !important;
+	margin: 0 !important;
+	line-height: 1 !important;
+	width: 32px !important;
+	height: 32px !important;
+	display: flex !important;
+	align-items: center !important;
+	justify-content: center !important;
+	border-radius: 8px !important;
+	transition: background-color 0.15s, color 0.15s !important;
+	min-height: 0 !important;
+	box-shadow: none !important;
+}
+
+button.geoprice-ppp-info-close:hover {
+	background: rgba(255, 255, 255, 0.2) !important;
+	color: #fff !important;
+}
+
+.geoprice-ppp-info-body {
+	padding: 24px !important;
+	overflow-y: auto !important;
+	font-size: 13px !important;
+	line-height: 1.7 !important;
+	color: #3c434a !important;
+}
+
+.geoprice-ppp-info-body h4 {
+	font-size: 13px !important;
+	font-weight: 600 !important;
+	color: #1d2327 !important;
+	margin: 18px 0 6px 0 !important;
+	padding: 0 !important;
+}
+
+.geoprice-ppp-info-body h4:first-of-type {
+	margin-top: 12px !important;
+}
+
+.geoprice-ppp-info-body p {
+	margin: 0 0 10px 0 !important;
+}
+
+.geoprice-ppp-info-body a {
+	color: #2271b1;
+}
+
+.geoprice-ppp-info-meta {
+	margin-top: 14px !important;
+	padding-top: 12px !important;
+	border-top: 1px solid #e2e4e7 !important;
+	font-size: 12px !important;
+	color: #888 !important;
+}
+
+
+/* ==========================================================================
+   MODAL — Overlay (Add Country)
    --------------------------------------------------------------------------
    The overlay covers the entire viewport. We use a CSS class
    (.geoprice-modal-visible) to toggle visibility instead of jQuery's
@@ -464,7 +696,7 @@ button.geoprice-modal-close:hover {
    MODAL — Country row
    --------------------------------------------------------------------------
    Each row is a horizontal flex container:
-     [Flag 32px] [Info: Name + Code·Currency (flex:1)] [Button]
+     [Flag 32px] [Info: Name + Code + Currency (flex:1)] [Button]
    ========================================================================== */
 
 .geoprice-modal-row {
