@@ -3,7 +3,7 @@
  * Plugin Name: GeoPrice for PMPro
  * Plugin URI:  https://gavamedia.com/plugins/geoprice-for-pmpro
  * Description: Variable geographic pricing for Paid Memberships Pro. Set country-specific membership prices in USD and display converted local currency amounts to visitors.
- * Version:     1.2.1
+ * Version:     1.2.2
  * Author:      GAVAMEDIA Corporation
  * Author URI:  https://gavamedia.com
  * License:     GPL-2.0-or-later
@@ -178,7 +178,7 @@ defined( 'ABSPATH' ) || exit;
  *                           Used by the plugin_action_links filter to add a
  *                           "Settings" link on the Plugins page.
  */
-define( 'GEOPRICE_PMPRO_VERSION', '1.2.1' );
+define( 'GEOPRICE_PMPRO_VERSION', '1.2.2' );
 define( 'GEOPRICE_PMPRO_DIR', plugin_dir_path( __FILE__ ) );
 define( 'GEOPRICE_PMPRO_URL', plugin_dir_url( __FILE__ ) );
 define( 'GEOPRICE_PMPRO_BASENAME', plugin_basename( __FILE__ ) );

@@ -52,9 +52,12 @@ defined( 'ABSPATH' ) || exit;
  * Queries 5 years of GDP per capita (PPP) data and takes the most recent
  * non-null value for each country to handle publication lag.
  *
+ * @param int $timeout Optional. HTTP timeout in seconds. Default 30 for
+ *                     background cron. Use 120 for manual admin refreshes
+ *                     since the World Bank API can be intermittently slow.
  * @return bool True on success, false on failure.
  */
-function geoprice_fetch_ppp_data() {
+function geoprice_fetch_ppp_data( $timeout = 30 ) {
 	$current_year = (int) gmdate( 'Y' );
 	$start_year   = $current_year - 4;
 
@@ -74,16 +77,21 @@ function geoprice_fetch_ppp_data() {
 		$current_year
 	);
 
-	$response = wp_remote_get( $url, array( 'timeout' => 30 ) );
+	$response = wp_remote_get( $url, array( 'timeout' => $timeout ) );
 
 	if ( is_wp_error( $response ) ) {
+		update_option( 'geoprice_ppp_last_error', $response->get_error_message(), false );
 		return false;
 	}
 
 	$code = wp_remote_retrieve_response_code( $response );
 	if ( 200 !== $code ) {
+		update_option( 'geoprice_ppp_last_error', sprintf( 'HTTP %d response from World Bank API.', $code ), false );
 		return false;
 	}
+
+	/* Clear any previous error on success. */
+	delete_option( 'geoprice_ppp_last_error' );
 
 	$body = wp_remote_retrieve_body( $response );
 	$data = json_decode( $body, true );
@@ -207,18 +215,28 @@ function geoprice_get_all_ppp_multipliers() {
 }
 
 /**
- * Maybe refresh PPP data (called by daily cron).
+ * Maybe refresh PPP data (called by cron on every cycle).
  *
- * Only actually fetches from the World Bank API if the cached data is older
- * than 30 days. This keeps API usage minimal (at most ~12 requests/year)
- * while ensuring data stays reasonably current.
+ * Two modes:
+ *   1. NO DATA YET — Retries every cron cycle until the first successful fetch.
+ *      The World Bank API can be intermittently slow (>30s response times), so
+ *      failures are expected. We just try again next cycle rather than blocking.
+ *   2. DATA EXISTS — Only re-fetches if the cached data is older than 30 days.
+ *      This keeps API usage minimal (~12 requests/year) while ensuring
+ *      reasonably current data.
  *
  * @return void
  */
 function geoprice_maybe_refresh_ppp() {
 	$last_updated = (int) get_option( 'geoprice_ppp_updated', 0 );
 
-	/* Skip if data was fetched within the last 30 days. */
+	if ( 0 === $last_updated ) {
+		/* No data yet — retry every cron cycle until success. */
+		geoprice_fetch_ppp_data();
+		return;
+	}
+
+	/* Data exists — only refresh if older than 30 days. */
 	if ( ( time() - $last_updated ) < 30 * DAY_IN_SECONDS ) {
 		return;
 	}

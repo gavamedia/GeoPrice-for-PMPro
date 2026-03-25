@@ -130,31 +130,31 @@ function geoprice_admin_enqueue_scripts( $hook ) {
 	}
 
 	/*
-	 * If PPP data hasn't been fetched yet, trigger an initial fetch now.
-	 * This only happens once (on the first admin page load after activation).
-	 * The World Bank API call takes a few seconds but ensures the PPP column
-	 * is available immediately rather than waiting for the daily cron.
-	 *
-	 * If the fetch fails (API down, timeout, network issue), show an admin
-	 * notice so the admin knows why the PPP column is missing and can retry
-	 * via the GeoPrice settings page.
+	 * Load PPP multipliers from cache. If data hasn't been fetched yet,
+	 * don't block the page load — the World Bank API can be intermittently
+	 * slow (30-60+ seconds). Instead, show an admin notice and let the
+	 * cron job handle the fetch in the background. Once fetched, the PPP
+	 * column appears automatically on the next page load.
 	 */
 	$ppp_multipliers = geoprice_get_all_ppp_multipliers();
 	if ( empty( $ppp_multipliers ) ) {
-		$fetch_success = geoprice_fetch_ppp_data();
-		if ( $fetch_success ) {
-			$ppp_multipliers = geoprice_get_all_ppp_multipliers();
-		} else {
-			add_action( 'admin_notices', function() {
-				echo '<div class="notice notice-warning is-dismissible"><p>';
-				printf(
-					/* translators: %s: link to GeoPrice settings page */
-					esc_html__( 'GeoPrice: Could not fetch PPP data from the World Bank API. The PPP pricing suggestions column will appear once data is available. %s', 'geoprice-for-pmpro' ),
-					'<a href="' . esc_url( admin_url( 'admin.php?page=geoprice-settings' ) ) . '">' . esc_html__( 'Try manually on the settings page.', 'geoprice-for-pmpro' ) . '</a>'
-				);
-				echo '</p></div>';
-			} );
-		}
+		add_action( 'admin_notices', function() {
+			$last_error = get_option( 'geoprice_ppp_last_error', '' );
+			echo '<div class="notice notice-warning is-dismissible"><p>';
+			printf(
+				/* translators: %s: link to GeoPrice settings page */
+				esc_html__( 'GeoPrice: PPP pricing data is being fetched from the World Bank. The suggestions column will appear automatically once data is available. %s', 'geoprice-for-pmpro' ),
+				'<a href="' . esc_url( admin_url( 'admin.php?page=geoprice-settings' ) ) . '">' . esc_html__( 'Check status on the settings page.', 'geoprice-for-pmpro' ) . '</a>'
+			);
+			if ( $last_error ) {
+				echo '<br><small>' . esc_html( sprintf(
+					/* translators: %s: error message */
+					__( 'Last attempt: %s', 'geoprice-for-pmpro' ),
+					$last_error
+				) ) . '</small>';
+			}
+			echo '</p></div>';
+		} );
 	}
 
 	$localized_data = array(

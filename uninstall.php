@@ -55,6 +55,7 @@ $options_to_delete = array(
 	'geoprice_ppp_ratios',
 	'geoprice_ppp_updated',
 	'geoprice_ppp_data_year',
+	'geoprice_ppp_last_error',
 );
 
 foreach ( $options_to_delete as $option ) {
