@@ -116,8 +116,9 @@
  *                                          search filter, and row highlighting.
  *
  * PMPRO HOOKS USED:
- *   - Action: pmpro_membership_level_after_other_settings — injects the country
- *     pricing table into the level edit form.
+ *   - Action: pmpro_membership_level_after_content_settings — injects the country
+ *     pricing section into the level edit form as its own collapsible section
+ *     between Content Settings and Other Settings.
  *   - Action: pmpro_save_membership_level — saves country pricing data when the
  *     level edit form is submitted.
  *   - Filter: pmpro_level_cost_text — replaces the cost display text with the

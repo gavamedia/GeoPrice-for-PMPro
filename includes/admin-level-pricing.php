@@ -2,19 +2,23 @@
 /**
  * Per-country pricing UI on the PMPro membership level edit page.
  *
- * This file adds a "Geographic Pricing (GeoPrice)" section to the bottom of
- * every PMPro membership level edit form (wp-admin/admin.php?page=pmpro-membershiplevels&edit=X).
- * It allows the admin to set custom USD prices for specific countries.
+ * This file adds a "Geographic Pricing" collapsible section to the PMPro
+ * membership level edit form (wp-admin/admin.php?page=pmpro-membershiplevels&edit=X),
+ * positioned between Content Settings and Other Settings as its own top-level
+ * section with PMPro's native toggle UI. It allows the admin to set custom
+ * USD prices for specific countries.
  *
  * HOW IT INTEGRATES WITH PMPRO:
  *   PMPro's level edit form fires several action hooks at different points.
  *   We use two of them:
  *
- *   1. `pmpro_membership_level_after_other_settings` (priority 10):
- *      Fires at the bottom of the level edit form, after all built-in settings.
- *      We render our country pricing table here. The table is inside PMPro's
- *      existing <form>, so our fields are included in the POST when the admin
- *      clicks "Save Level."
+ *   1. `pmpro_membership_level_after_content_settings` (priority 10):
+ *      Fires at the end of the Content Settings section. We close PMPro's
+ *      section wrappers, render our own standalone collapsible section using
+ *      PMPro's native pmpro_section markup, then re-open the wrappers so
+ *      PMPro's own closing tags don't produce broken HTML.
+ *      This positions our section BETWEEN Content Settings and Other Settings,
+ *      giving it equal visual prominence to PMPro's built-in sections.
  *
  *   2. `pmpro_save_membership_level` (priority 10):
  *      Fires after PMPro has saved the level to the database (including its
@@ -136,8 +140,23 @@ add_action( 'admin_enqueue_scripts', 'geoprice_admin_enqueue_scripts' );
  *   3. When the admin submits the form, PMPro processes its own fields first,
  *      then fires pmpro_save_membership_level, which triggers our save handler.
  *
+ * SECTION PLACEMENT TECHNIQUE:
+ *   We hook into `pmpro_membership_level_after_content_settings` which fires
+ *   INSIDE the Content Settings section's inner wrapper. To create our own
+ *   standalone collapsible section (rather than being nested inside Content
+ *   Settings), we use a standard PMPro add-on technique:
+ *
+ *   1. Close the current section's </div></div> wrappers (pmpro_section_inside
+ *      and pmpro_section).
+ *   2. Render our own complete pmpro_section with toggle button and inner content.
+ *   3. Re-open <div><div> wrappers so PMPro's own closing </div></div> tags
+ *      (which follow the hook) produce valid HTML.
+ *
+ *   This positions Geographic Pricing as a top-level collapsible section
+ *   between Content Settings and Other Settings, matching PMPro's native UI.
+ *
  * PMPRO HOOK USED:
- *   `pmpro_membership_level_after_other_settings` receives the $level object
+ *   `pmpro_membership_level_after_content_settings` receives the $level object
  *   as its only parameter. This object contains the level's current data
  *   (id, name, initial_payment, billing_amount, etc.) as loaded from the database.
  *   We use $level->id to look up our per-country prices from level meta.
@@ -176,80 +195,128 @@ function geoprice_level_pricing_fields( $level ) {
 	 * our save handler. This follows WordPress security best practices.
 	 */
 	wp_nonce_field( 'geoprice_save_prices', 'geoprice_nonce' );
+
+	/*
+	 * SECTION INJECTION TECHNIQUE:
+	 *
+	 * This hook fires INSIDE the Content Settings section's pmpro_section_inside div.
+	 * PMPro's template will output </div></div> after this hook returns, closing
+	 * the Content Settings section.
+	 *
+	 * To render our own top-level collapsible section, we:
+	 *   1. Close the current section's wrappers (</div> pmpro_section_inside,
+	 *      </div> pmpro_section).
+	 *   2. Output our complete pmpro_section with its own toggle and inner content.
+	 *   3. Re-open dummy <div><div> wrappers that PMPro's closing tags will close
+	 *      harmlessly — producing valid HTML with no visible side effects.
+	 *
+	 * This is a well-established pattern used by PMPro add-ons (e.g., PMPro
+	 * Variable Pricing, PMPro Sponsored Members) to inject standalone sections
+	 * into the level edit page from "after_*_settings" hooks.
+	 */
 	?>
-	<div id="geoprice-pricing-section">
-		<h2 class="geoprice-section-title"><?php esc_html_e( 'Geographic Pricing (GeoPrice)', 'geoprice-for-pmpro' ); ?></h2>
-		<p class="description">
-			<?php esc_html_e( 'Set custom USD prices per country. Leave blank to use the default level price. Visitors will see amounts converted to their local currency.', 'geoprice-for-pmpro' ); ?>
-		</p>
+	<?php // Step 1: Close Content Settings section wrappers. ?>
+	</div> <!-- close pmpro_section_inside (Content Settings) -->
+	</div> <!-- close pmpro_section (Content Settings) -->
 
-		<!--
-			The pricing table. Each row represents one country with two price fields.
-			The table uses PMPro's "widefat" class for consistent admin styling,
-			plus our own "geoprice-country-table" class for custom styling.
-		-->
-		<table class="geoprice-country-table widefat" id="geoprice-country-table">
-			<thead>
-				<tr>
-					<th class="geoprice-col-country"><?php esc_html_e( 'Country', 'geoprice-for-pmpro' ); ?></th>
-					<th class="geoprice-col-currency"><?php esc_html_e( 'Local Currency', 'geoprice-for-pmpro' ); ?></th>
-					<th class="geoprice-col-price"><?php esc_html_e( 'Initial Payment (USD)', 'geoprice-for-pmpro' ); ?></th>
-					<th class="geoprice-col-price"><?php esc_html_e( 'Billing Amount (USD)', 'geoprice-for-pmpro' ); ?></th>
-				</tr>
-			</thead>
-			<tbody>
-				<?php
-				/*
-				 * RENDERING ORDER:
-				 * 1. Top 20 countries first (always visible) — these are the most
-				 *    commonly configured and most likely to be relevant.
-				 * 2. All remaining countries (hidden by default, revealed by "Show All").
-				 *
-				 * Countries in the "extra" group that have saved prices are ALSO
-				 * shown initially (see geoprice_render_country_row's $style logic)
-				 * so admins can always see what they've configured.
-				 */
-
-				// Render top 20 countries (always visible, marked as geoprice-top-country).
-				foreach ( $top_codes as $code ) {
-					if ( isset( $countries[ $code ] ) ) {
-						geoprice_render_country_row( $code, $countries[ $code ], $saved_prices, false );
-					}
-				}
-
-				// Render remaining countries (hidden by default, marked as geoprice-extra-country).
-				foreach ( $countries as $code => $data ) {
-					if ( in_array( $code, $top_codes, true ) ) {
-						continue; // Already rendered above.
-					}
-					geoprice_render_country_row( $code, $data, $saved_prices, true );
-				}
-				?>
-			</tbody>
-		</table>
-
-		<!--
-			Toggle buttons and search filter below the table.
-			- "Show All Countries" reveals the hidden geoprice-extra-country rows.
-			- "Show Top 20 Only" hides them again (keeping rows with prices visible).
-			- The search filter searches ALL countries by name regardless of visibility state.
-			These are handled by admin.js.
-		-->
-		<p class="geoprice-toggle-wrap">
-			<button type="button" class="button button-secondary" id="geoprice-show-more">
-				<?php esc_html_e( 'Show All Countries', 'geoprice-for-pmpro' ); ?>
+	<?php // Step 2: Render our own standalone pmpro_section. ?>
+	<div id="geographic-pricing" class="pmpro_section" data-visibility="shown" data-activated="true">
+		<div class="pmpro_section_toggle">
+			<button class="pmpro_section-toggle-button" type="button" aria-expanded="true">
+				<span class="dashicons dashicons-arrow-up-alt2"></span>
+				<?php esc_html_e( 'Geographic Pricing', 'geoprice-for-pmpro' ); ?>
 			</button>
-			<button type="button" class="button button-secondary" id="geoprice-hide-more" style="display:none;">
-				<?php esc_html_e( 'Show Top 20 Only', 'geoprice-for-pmpro' ); ?>
-			</button>
-			<span class="geoprice-filter-wrap">
-				<input type="text" id="geoprice-filter" placeholder="<?php esc_attr_e( 'Filter countries...', 'geoprice-for-pmpro' ); ?>" class="regular-text" />
-			</span>
-		</p>
-	</div>
+		</div>
+		<div class="pmpro_section_inside">
+			<p class="description" style="margin-bottom: 1em;">
+				<?php esc_html_e( 'Set custom USD prices per country. Leave blank to use the default level price. Visitors will see amounts converted to their local currency.', 'geoprice-for-pmpro' ); ?>
+			</p>
+
+			<!--
+				The pricing table. Each row represents one country with two price fields.
+				The table uses PMPro's "widefat" class for consistent admin styling,
+				plus our own "geoprice-country-table" class for custom styling.
+			-->
+			<table class="geoprice-country-table widefat" id="geoprice-country-table">
+				<thead>
+					<tr>
+						<th class="geoprice-col-country"><?php esc_html_e( 'Country', 'geoprice-for-pmpro' ); ?></th>
+						<th class="geoprice-col-currency"><?php esc_html_e( 'Local Currency', 'geoprice-for-pmpro' ); ?></th>
+						<th class="geoprice-col-price"><?php esc_html_e( 'Initial Payment (USD)', 'geoprice-for-pmpro' ); ?></th>
+						<th class="geoprice-col-price"><?php esc_html_e( 'Renewal Amount (USD)', 'geoprice-for-pmpro' ); ?></th>
+					</tr>
+				</thead>
+				<tbody>
+					<?php
+					/*
+					 * RENDERING ORDER:
+					 * 1. Top 20 countries first (always visible) — these are the most
+					 *    commonly configured and most likely to be relevant.
+					 * 2. All remaining countries (hidden by default, revealed by "Show All").
+					 *
+					 * Countries in the "extra" group that have saved prices are ALSO
+					 * shown initially (see geoprice_render_country_row's $style logic)
+					 * so admins can always see what they've configured.
+					 */
+
+					// Render top 20 countries (always visible, marked as geoprice-top-country).
+					foreach ( $top_codes as $code ) {
+						if ( isset( $countries[ $code ] ) ) {
+							geoprice_render_country_row( $code, $countries[ $code ], $saved_prices, false );
+						}
+					}
+
+					// Render remaining countries (hidden by default, marked as geoprice-extra-country).
+					foreach ( $countries as $code => $data ) {
+						if ( in_array( $code, $top_codes, true ) ) {
+							continue; // Already rendered above.
+						}
+						geoprice_render_country_row( $code, $data, $saved_prices, true );
+					}
+					?>
+				</tbody>
+			</table>
+
+			<!--
+				Toggle buttons and search filter below the table.
+				- "Show All Countries" reveals the hidden geoprice-extra-country rows.
+				- "Show Top 20 Only" hides them again (keeping rows with prices visible).
+				- The search filter searches ALL countries by name regardless of visibility state.
+				These are handled by admin.js.
+			-->
+			<p class="geoprice-toggle-wrap">
+				<button type="button" class="button button-secondary" id="geoprice-show-more">
+					<?php esc_html_e( 'Show All Countries', 'geoprice-for-pmpro' ); ?>
+				</button>
+				<button type="button" class="button button-secondary" id="geoprice-hide-more" style="display:none;">
+					<?php esc_html_e( 'Show Top 20 Only', 'geoprice-for-pmpro' ); ?>
+				</button>
+				<span class="geoprice-filter-wrap">
+					<input type="text" id="geoprice-filter" placeholder="<?php esc_attr_e( 'Filter countries...', 'geoprice-for-pmpro' ); ?>" class="regular-text" />
+				</span>
+			</p>
+		</div> <!-- end pmpro_section_inside (Geographic Pricing) -->
+	</div> <!-- end pmpro_section (Geographic Pricing) -->
+
+	<?php
+	/*
+	 * Step 3: Re-open dummy wrappers.
+	 *
+	 * After this function returns, PMPro's template outputs:
+	 *   </div> <!-- end pmpro_section_inside -->
+	 *   </div> <!-- end pmpro_section -->
+	 *
+	 * Those closing tags originally belong to Content Settings, but we already
+	 * closed them in Step 1. We must re-open matching <div> tags here so
+	 * PMPro's closing tags produce valid HTML. These empty wrappers are
+	 * invisible — they contain no content and collapse to zero height.
+	 */
+	?>
+	<div class="pmpro_section" style="display:none;">
+	<div class="pmpro_section_inside">
 	<?php
 }
-add_action( 'pmpro_membership_level_after_other_settings', 'geoprice_level_pricing_fields' );
+add_action( 'pmpro_membership_level_after_content_settings', 'geoprice_level_pricing_fields' );
 
 /**
  * Render a single country row in the pricing table.
