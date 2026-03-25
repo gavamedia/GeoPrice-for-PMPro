@@ -58,7 +58,8 @@
 		var $sort     = $('#geoprice-modal-sort');
 		var $group    = $('#geoprice-modal-group');
 		var $list     = $('#geoprice-modal-list');
-		var $saveNote = $('#geoprice-save-reminder');
+		var $saveNote       = $('#geoprice-save-reminder');
+		var saveNoteVisible = false;
 
 		/*
 		 * Move the modal overlay to <body> so it's outside PMPro's form
@@ -70,13 +71,13 @@
 		/**
 		 * Show the "unsaved changes" reminder.
 		 * Called whenever the admin adds a country, removes a country,
-		 * or edits a price field. Only triggers once — subsequent calls
-		 * are no-ops since the banner is already visible.
+		 * or edits a price field. Uses a boolean flag so it only fires
+		 * once — subsequent calls are instant no-ops.
 		 */
 		function showSaveReminder() {
-			if ($saveNote.is(':hidden')) {
-				$saveNote.slideDown(250);
-			}
+			if (saveNoteVisible) return;
+			saveNoteVisible = true;
+			$saveNote.css('display', 'block');
 		}
 
 
