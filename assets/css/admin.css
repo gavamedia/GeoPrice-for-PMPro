@@ -1,0 +1,168 @@
+/**
+ * GeoPrice for PMPro — Admin Styles
+ *
+ * These styles are loaded ONLY on the PMPro membership level edit page
+ * (admin.php?page=pmpro-membershiplevels&edit=X). See admin-level-pricing.php
+ * for the conditional enqueue logic.
+ *
+ * DESIGN GOALS:
+ *   - Match WordPress admin UI conventions (colors, spacing, typography).
+ *   - Make the country pricing table scannable at a glance.
+ *   - Visually distinguish countries that have custom prices (green highlight).
+ *   - Keep the section clearly separated from PMPro's own settings above it.
+ *
+ * @package   GeoPrice_For_PMPro
+ * @copyright 2024-2026 GAVAMEDIA Corporation (https://gavamedia.com)
+ * @license   GPL-2.0-or-later
+ */
+
+
+/* ==========================================================================
+   Section container
+   ==========================================================================
+   Separates the GeoPrice section from PMPro's settings above with a top
+   border and vertical spacing. This makes it clear that "Geographic Pricing"
+   is a distinct section, not part of PMPro's "Other Settings." */
+
+#geoprice-pricing-section {
+	margin-top: 30px;
+	padding-top: 20px;
+	border-top: 1px solid #c3c4c7; /* WordPress admin border color */
+}
+
+.geoprice-section-title {
+	font-size: 1.3em;
+	margin-bottom: 5px;
+}
+
+
+/* ==========================================================================
+   Country pricing table — structure
+   ==========================================================================
+   The table lists all countries with their currency info and price inputs.
+   Uses border-collapse for clean cell borders without doubled-up lines. */
+
+.geoprice-country-table {
+	margin-top: 15px;
+	border-collapse: collapse;
+}
+
+/* Column headers: gray background with a bottom border, matching WP admin tables. */
+.geoprice-country-table thead th {
+	background: #f0f0f1;        /* WordPress admin light gray */
+	padding: 10px 12px;
+	text-align: left;
+	font-weight: 600;
+	border-bottom: 2px solid #c3c4c7;
+}
+
+/* Row borders: subtle horizontal lines between country rows. */
+.geoprice-country-table tbody tr {
+	border-bottom: 1px solid #e0e0e0;
+}
+
+/* Hover highlight: light gray background on row hover for easier scanning
+   when the admin is looking through many countries. */
+.geoprice-country-table tbody tr:hover {
+	background-color: #f6f7f7;
+}
+
+
+/* ==========================================================================
+   Country pricing table — row highlighting for countries with prices
+   ==========================================================================
+   Rows where the admin has entered at least one price value are highlighted
+   green. This provides instant visual feedback about which countries have
+   custom pricing configured. The JS in admin.js adds/removes the
+   'geoprice-has-price' class dynamically as the admin types. */
+
+.geoprice-country-table tbody tr.geoprice-has-price {
+	background-color: #e8f5e9;  /* Light green — "this country has a price" */
+}
+
+.geoprice-country-table tbody tr.geoprice-has-price:hover {
+	background-color: #dcedc8;  /* Slightly darker green on hover */
+}
+
+
+/* ==========================================================================
+   Country pricing table — cell styling
+   ========================================================================== */
+
+.geoprice-country-table td {
+	padding: 6px 12px;
+	vertical-align: middle;
+}
+
+/* Country name column: wide enough to fit long names like
+   "Saint Vincent and the Grenadines" without wrapping. */
+.geoprice-col-country {
+	min-width: 200px;
+}
+
+/* Currency code column: shows "CAD", "EUR", etc. Gray text because this
+   is reference info, not interactive. */
+.geoprice-col-currency {
+	min-width: 70px;
+	color: #666;
+}
+
+/* Price input columns: enough width for the "$" prefix + input field.
+   nowrap prevents the "$" and input from wrapping to separate lines. */
+.geoprice-col-price {
+	min-width: 160px;
+	white-space: nowrap;
+}
+
+
+/* ==========================================================================
+   Country pricing table — inline elements
+   ========================================================================== */
+
+/* Country code shown in parentheses after the name, e.g., "Canada (CA)".
+   Dimmed because it's secondary info — the country name is primary. */
+.geoprice-country-code {
+	color: #888;
+	font-size: 0.9em;
+	margin-left: 4px;
+}
+
+/* Dollar sign prefix before each price input. Styled as a visual label,
+   not an interactive element. Bold gray to be visible but not dominant. */
+.geoprice-dollar-prefix {
+	color: #888;
+	margin-right: 2px;
+	font-weight: 600;
+}
+
+/* Price input fields: compact width (90px fits amounts up to "9999.99"),
+   right-aligned so decimal points line up when scanning vertically.
+   !important overrides WordPress's default .small-text width. */
+.geoprice-price-input {
+	width: 90px !important;
+	text-align: right;
+}
+
+
+/* ==========================================================================
+   Toggle buttons and search filter (below the table)
+   ==========================================================================
+   Flexbox layout puts the Show/Hide buttons on the left and the search
+   filter on the right (pushed there by margin-left: auto on the filter wrap). */
+
+.geoprice-toggle-wrap {
+	margin-top: 15px;
+	display: flex;
+	align-items: center;
+	gap: 12px;             /* Space between the two buttons */
+}
+
+/* Search filter input pushed to the right side of the flex container. */
+.geoprice-filter-wrap {
+	margin-left: auto;
+}
+
+/* Fixed width for the search input so it doesn't grow to fill available space. */
+#geoprice-filter {
+	width: 220px;
+}

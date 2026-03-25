@@ -1,0 +1,14 @@
+# Ignore all log directories and files
+logs/
+log/
+*.log
+
+# Ignore cache directories
+.cache/
+cache/
+
+# Also ignore common things you don't want to commit
+node_modules/
+.DS_Store
+.env
+.env.local
