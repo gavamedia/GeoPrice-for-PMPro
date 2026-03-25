@@ -152,13 +152,17 @@ add_action( 'admin_enqueue_scripts', 'geoprice_admin_enqueue_scripts' );
  * @return void
  */
 function geoprice_level_pricing_fields( $level ) {
-	$countries      = geoprice_get_all_countries();
-	$default_codes  = geoprice_get_default_countries();
-	$saved_prices   = array();
+	$countries        = geoprice_get_all_countries();
+	$default_codes    = geoprice_get_default_countries();
+	$saved_prices     = array();
+	$saved_active     = array();
 
 	/*
-	 * Load existing per-country prices from level meta.
-	 * Only attempt this if the level has been saved (has an ID).
+	 * Load existing data from level meta.
+	 * Two meta keys:
+	 *   - geoprice_prices: JSON of per-country pricing overrides.
+	 *   - geoprice_active_countries: JSON array of country codes the admin
+	 *     has added to the table (persists even if no prices are set yet).
 	 */
 	if ( ! empty( $level->id ) ) {
 		$meta = get_pmpro_membership_level_meta( $level->id, 'geoprice_prices', true );
@@ -168,15 +172,24 @@ function geoprice_level_pricing_fields( $level ) {
 				$saved_prices = array();
 			}
 		}
+
+		$active_meta = get_pmpro_membership_level_meta( $level->id, 'geoprice_active_countries', true );
+		if ( ! empty( $active_meta ) ) {
+			$saved_active = json_decode( $active_meta, true );
+			if ( ! is_array( $saved_active ) ) {
+				$saved_active = array();
+			}
+		}
 	}
 
 	/*
 	 * Determine which countries to show in the table on page load:
 	 *   1. Default countries (US, CA, MX) — always shown.
-	 *   2. Any country with saved pricing data — always shown.
+	 *   2. Countries the admin has explicitly added — persisted in meta.
+	 *   3. Countries with saved pricing data — always shown.
 	 * Merge and deduplicate.
 	 */
-	$active_codes = array_unique( array_merge( $default_codes, array_keys( $saved_prices ) ) );
+	$active_codes = array_unique( array_merge( $default_codes, $saved_active, array_keys( $saved_prices ) ) );
 
 	wp_nonce_field( 'geoprice_save_prices', 'geoprice_nonce' );
 	?>
@@ -304,6 +317,8 @@ function geoprice_render_country_row( $code, $data, $saved_prices ) {
 	$billing = isset( $saved_prices[ $code ]['billing_amount'] ) ? $saved_prices[ $code ]['billing_amount'] : '';
 	?>
 	<tr data-code="<?php echo esc_attr( $code ); ?>">
+		<!-- Hidden input tracks this country's presence in the table for saving. -->
+		<input type="hidden" name="geoprice_active_countries[]" value="<?php echo esc_attr( $code ); ?>" />
 		<td class="geoprice-col-country">
 			<strong><?php echo esc_html( $data['name'] ); ?></strong>
 			<span class="geoprice-country-code">(<?php echo esc_html( $code ); ?>)</span>
@@ -413,5 +428,32 @@ function geoprice_save_level_pricing( $level_id ) {
 	}
 
 	update_pmpro_membership_level_meta( $level_id, 'geoprice_prices', wp_json_encode( $prices ) );
+
+	/*
+	 * Save the list of countries the admin has added to the table.
+	 * This persists the table state even for countries that don't have
+	 * prices set yet — so if the admin adds Germany but leaves prices
+	 * blank, Germany still appears in the table on next page load.
+	 *
+	 * The hidden input geoprice_active_countries[] is included in every
+	 * table row (both PHP-rendered and JS-added). Removed rows have no
+	 * input in the DOM, so they won't appear here.
+	 */
+	$active_countries = array();
+	if ( ! empty( $_POST['geoprice_active_countries'] ) && is_array( $_POST['geoprice_active_countries'] ) ) {
+		$all_countries = geoprice_get_all_countries();
+		$defaults      = geoprice_get_default_countries();
+
+		foreach ( $_POST['geoprice_active_countries'] as $code ) {
+			$code = sanitize_text_field( $code );
+			/* Validate against known list and exclude defaults (no need to store those). */
+			if ( isset( $all_countries[ $code ] ) && ! in_array( $code, $defaults, true ) ) {
+				$active_countries[] = $code;
+			}
+		}
+		$active_countries = array_unique( $active_countries );
+	}
+
+	update_pmpro_membership_level_meta( $level_id, 'geoprice_active_countries', wp_json_encode( array_values( $active_countries ) ) );
 }
 add_action( 'pmpro_save_membership_level', 'geoprice_save_level_pricing' );

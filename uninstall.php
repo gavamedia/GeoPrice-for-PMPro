@@ -88,6 +88,7 @@ $table_exists    = $wpdb->get_var(
 
 if ( $table_exists ) {
 	$wpdb->delete( $levelmeta_table, array( 'meta_key' => 'geoprice_prices' ) );
+	$wpdb->delete( $levelmeta_table, array( 'meta_key' => 'geoprice_active_countries' ) );
 }
 
 /*

@@ -169,6 +169,7 @@
 			if ($tbody.find('tr[data-code="' + code + '"]').length > 0) return;
 
 			var html = '<tr data-code="' + escAttr(code) + '">' +
+				'<input type="hidden" name="geoprice_active_countries[]" value="' + escAttr(code) + '" />' +
 				'<td class="geoprice-col-country">' +
 					'<strong>' + escHtml(c.name) + '</strong> ' +
 					'<span class="geoprice-country-code">(' + escHtml(code) + ')</span>' +
