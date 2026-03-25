@@ -515,18 +515,18 @@
 
 			var pppMult = pppMultipliers[code];
 			var pppCell = '';
-			var applyCell = '';
 
 			if (hasPPP) {
-				var pppDisplay = pppMult ? pppMult.toFixed(2) + '\u00D7' : '\u2014';
-				var pppClass = pppMult ? 'geoprice-ppp-value' : 'geoprice-ppp-na';
-				pppCell = '<td class="geoprice-col-ppp">' +
-					'<span class="' + pppClass + '">' + pppDisplay + '</span>' +
-				'</td>';
-
-				applyCell = '<td class="geoprice-col-apply">' +
-					'<button type="button" class="geoprice-apply-btn" title="Apply PPP-suggested price">Apply Suggested</button>' +
-				'</td>';
+				if (pppMult) {
+					pppCell = '<td class="geoprice-col-ppp">' +
+						'<span class="geoprice-ppp-value">' + pppMult.toFixed(2) + '\u00D7</span> ' +
+						'<button type="button" class="geoprice-apply-btn" title="Apply PPP-suggested price">Apply Suggested</button>' +
+					'</td>';
+				} else {
+					pppCell = '<td class="geoprice-col-ppp">' +
+						'<span class="geoprice-ppp-na">\u2014</span>' +
+					'</td>';
+				}
 			}
 
 			var html = '<tr data-code="' + escAttr(code) + '">' +
@@ -536,7 +536,6 @@
 					'<span class="geoprice-country-code">(' + escHtml(code) + ')</span>' +
 				'</td>' +
 				'<td class="geoprice-col-currency">' + escHtml(c.currency) + '</td>' +
-				pppCell +
 				'<td class="geoprice-col-price">' +
 					'<span class="geoprice-dollar-prefix">$</span>' +
 					'<input type="text" name="geoprice_prices[' + escAttr(code) + '][initial_payment]" ' +
@@ -551,7 +550,7 @@
 						'class="small-text geoprice-price-input" ' +
 						'pattern="[0-9]*\\.?[0-9]*" inputmode="decimal" />' +
 				'</td>' +
-				applyCell +
+				pppCell +
 				'<td class="geoprice-col-actions">' +
 					'<button type="button" class="button button-link-delete geoprice-remove-btn" title="Remove">' +
 						'<span class="dashicons dashicons-no-alt"></span>' +
