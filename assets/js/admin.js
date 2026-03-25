@@ -114,10 +114,29 @@
 
 		$tbody.on('click', '.geoprice-remove-btn', function(e) {
 			e.preventDefault();
-			$(this).closest('tr').fadeOut(200, function() {
+			var $tr = $(this).closest('tr');
+			var removedCode = $tr.data('code');
+			$tr.fadeOut(200, function() {
 				$(this).remove();
-				if ($overlay.hasClass('geoprice-modal-visible')) {
-					renderModalList();
+
+				/*
+				 * If the modal is open, un-grey the removed country's row
+				 * in-place rather than re-rendering the entire list (which
+				 * would reset scroll position).
+				 */
+				if ($overlay.hasClass('geoprice-modal-visible') && removedCode) {
+					$list.find('.geoprice-modal-row.geoprice-already-added').each(function() {
+						var $row = $(this);
+						var $badge = $row.find('.geoprice-modal-added-badge');
+						/* Match by checking if the row contains this country code. */
+						if ($row.find('.geoprice-modal-row-code').text() === removedCode) {
+							$row.removeClass('geoprice-already-added');
+							$badge.replaceWith(
+								'<button type="button" class="geoprice-modal-add-btn" data-code="' +
+								escAttr(removedCode) + '">+ Add</button>'
+							);
+						}
+					});
 				}
 			});
 		});
@@ -163,10 +182,6 @@
 			var $newRow = $(html).hide();
 			$tbody.append($newRow);
 			$newRow.fadeIn(200);
-
-			if ($overlay.hasClass('geoprice-modal-visible')) {
-				renderModalList();
-			}
 		}
 
 
@@ -236,8 +251,18 @@
 
 		$list.on('click', '.geoprice-modal-add-btn', function(e) {
 			e.preventDefault();
-			var code = $(this).data('code');
+			var $btn = $(this);
+			var code = $btn.data('code');
 			addCountryRow(code);
+
+			/*
+			 * Instead of re-rendering the entire list (which resets scroll
+			 * position), update just this row in-place to show the "Added"
+			 * state. This keeps the user's scroll position exactly where it is.
+			 */
+			var $row = $btn.closest('.geoprice-modal-row');
+			$row.addClass('geoprice-already-added');
+			$btn.replaceWith('<span class="geoprice-modal-added-badge">&#10003; Added</span>');
 		});
 
 		/*
